@@ -67,22 +67,9 @@ class ActorHead(nn.Module):
             return_log_prob=True,
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:#tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.actor_head(x)
-
-        # dist = Categorical(logits=x)
-        # if self.do_sample:
-        #     action_id = dist.sample()
-        # else:
-        #     action_id = dist.probs.argmax(dim=-1).to(torch.int32)
-        #
-        # action = action_id // self.num_nodes
-        # action_target = action_id % self.num_nodes
         return x
-        # return (
-        #     torch.stack([action, action_target], dim=-1),
-        #     x,
-        # )
 
 
 class ValueHead(nn.Module):

@@ -12,7 +12,7 @@ from environments.flipit_geometric import FlipItMap, FlipItEnv
 from algorithms.simple_nn import TrainableNNAgentPolicy, NNAgentPolicy
 from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy
 from algorithms.generator import AgentGenerator
-from config import TrainingConfig, LossConfig, EnvConfig
+from config import TrainingConfig, LossConfig, EnvConfig, Player
 from utils import train_agent
 
 
@@ -22,14 +22,16 @@ env_config = dotenv_values("../.env")
 https://www.ijcai.org/proceedings/2024/0880.pdf
 https://arxiv.org/pdf/2306.01324
 """
-def training_loop(device: torch.device, cpu_cores: int, player: int, config=None):
-    player_name = "defender" if player == 0 else "attacker"
+def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: str | None = None, config=None):
+    player_name = Player(player).name
+    if not run_name:
+        run_name = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-{player_name}'
 
     if config is None:
         wandb.init(
             entity=env_config["WANDB_ENTITY"],
             project=env_config["WANDB_PROJECT"],
-            name=f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-{player_name}'
+            name=run_name,
         )
         config = wandb.config
 
@@ -50,15 +52,18 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, config=None
             device=device,
             loss_config=loss_config,
             training_config=training_config,
+            run_name=run_name,
         )
         attacker_agent = MultiAgentPolicy(
             action_size=num_nodes,
+            player_type=1,
             device=device,
             embedding_size=32,
             policy_generator=AgentGenerator(
                 NNAgentPolicy,
                 {}
             ),
+            run_name=run_name,
         )
     else:
         defender_agent = NNAgentPolicy(
@@ -66,6 +71,7 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, config=None
             player_type=0,
             embedding_size=32,
             device=device,
+            run_name=run_name,
         )
         attacker_agent = TrainableNNAgentPolicy(
             num_nodes=num_nodes,
@@ -74,6 +80,7 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, config=None
             device=device,
             loss_config=loss_config,
             training_config=training_config,
+            run_name=run_name,
         )
 
     combined_policy = CombinedPolicy(
@@ -129,10 +136,12 @@ if __name__ == "__main__":
     with open(args.config, "r") as file:
         config_content = yaml.safe_load(file)
 
+    run_name_ = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-attacker-{args.name}'
+
     with wandb.init(
         entity=env_config["WANDB_ENTITY"],
         project=env_config["WANDB_PROJECT"],
         config=config_content,
-        name=f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-attacker-{args.name}',
+        name=run_name_,
     ) as run:
-        training_loop(device, cpu_cores, args.player, run.config)
+        training_loop(device, cpu_cores, args.player, run_name=run_name_, config=run.config)

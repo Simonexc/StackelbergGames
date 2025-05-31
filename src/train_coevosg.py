@@ -75,7 +75,6 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     for turn in range(num_turns):
         train_stage_coevosg(combined_policy, pbar)
         new_best_fitness = defender_agent.best_population.fitness
-        print(new_best_fitness, best_fitness)
         if new_best_fitness > best_fitness:
             best_fitness = new_best_fitness
             no_improvement = 0

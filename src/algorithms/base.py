@@ -6,6 +6,8 @@ from torch import nn
 from tensordict import TensorDictBase
 from torchrl.data import ReplayBuffer
 
+from config import Player
+
 
 class BaseAgent(nn.Module, ABC):
     def __init__(
@@ -23,7 +25,7 @@ class BaseAgent(nn.Module, ABC):
         self.player_type = player_type
         self.embedding_size = embedding_size
         self._device = device
-        self.player_name = "attacker" if self.player_type == 1 else "defender"
+        self.player_name = Player(player_type).name
         self.run_name = run_name
         self.agent_id = agent_id
 

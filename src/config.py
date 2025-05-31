@@ -30,6 +30,10 @@ class Player(Enum):
         return [cls.defender, cls.attacker]
 
     @property
+    def name(self) -> str:
+        return "defender" if self == Player.defender else "attacker"
+
+    @property
     def opponent(self) -> "Player":
         match self:
             case Player.defender:

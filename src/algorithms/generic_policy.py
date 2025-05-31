@@ -1,3 +1,5 @@
+import os
+
 import torch
 import wandb
 from tensordict.nn import set_interaction_type as set_exploration_type, InteractionType as ExplorationType

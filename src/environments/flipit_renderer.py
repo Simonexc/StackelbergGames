@@ -5,7 +5,6 @@ import torch
 
 from .flipit_geometric import FlipItEnv
 from config import Player
-from torchrl.envs.libs.dm_control import DMControlEnv
 
 
 class Renderer:

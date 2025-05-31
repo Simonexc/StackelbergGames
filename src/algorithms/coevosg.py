@@ -164,7 +164,7 @@ class PureStrategy(StrategyBase):
 
             if payoff > max_attacker_payoff:
                 max_attacker_payoff = payoff
-        # print("max", max_attacker_payoff)
+
         self.fitness = max_attacker_payoff
 
     def save(self, run_name: str, player_name: str) -> None:
@@ -479,10 +479,8 @@ class CoevoSGAgentBase(BaseAgent, ABC):
     def evaluate_population(self, opponent_population: list[StrategyBase]) -> None:
         """ Evaluates fitness for all individuals in a specified population. """
         tasks = []
-        # print([s.fitness for s in opponent_population])
 
         for strategy_in_pop in self.population:
-            # print("n", self.config.attacker_eval_top_n)
             # The worker needs env, opponent_population, top_n, and type
             tasks.append((
                 strategy_in_pop,
@@ -497,14 +495,11 @@ class CoevoSGAgentBase(BaseAgent, ABC):
             num_workers = min(torch.multiprocessing.cpu_count(), len(self.population), 8)  # Limit max workers e.g. to 8
 
         if num_workers > 1:
-            # print("start2")
             ctx = torch.multiprocessing.get_context('spawn')
             with ctx.Pool(processes=num_workers) as pool:
                 results_fitness = pool.map(_worker_evaluate_strategy, tasks)
-            # print("end")
 
             for i, fitness_val in enumerate(results_fitness):
-                # print(fitness_val)
                 self.population[i].fitness = fitness_val
 
         else:
