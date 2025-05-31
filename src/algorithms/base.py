@@ -4,6 +4,7 @@ import os
 import torch
 from torch import nn
 from tensordict import TensorDictBase
+from torchrl.data import ReplayBuffer
 
 
 class BaseAgent(nn.Module, ABC):
@@ -44,5 +45,14 @@ class BaseAgent(nn.Module, ABC):
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
         """
         Forward pass of the agent.
+        Should be implemented by subclasses.
+        """
+
+
+class BaseTrainableAgent(BaseAgent, ABC):
+    @abstractmethod
+    def train_cycle(self, tensordict_data: TensorDictBase, replay_buffer: ReplayBuffer, cycle_num: int) -> float:
+        """
+        Train the agent for one cycle.
         Should be implemented by subclasses.
         """

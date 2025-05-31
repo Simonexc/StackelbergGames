@@ -2,7 +2,7 @@ import argparse
 import multiprocessing
 from functools import partial
 
-from train_attacker import training_loop
+from train_single_stage import training_loop
 
 import torch
 import wandb

@@ -11,7 +11,7 @@ from torchrl.data.replay_buffers.storages import LazyTensorStorage
 from torchrl.envs import EnvBase
 
 from config import TrainingConfig
-from algorithms.simple_nn import CombinedPolicy, MultiAgentPolicy
+from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy
 
 
 def create_replay_buffer(config: TrainingConfig) -> ReplayBuffer:

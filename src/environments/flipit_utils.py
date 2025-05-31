@@ -1,14 +1,11 @@
 from enum import Enum
 from typing import NamedTuple
 
-import numpy as np
 import torch
 import random
 
 from .flipit_geometric import FlipItEnv
-#from strategies import PureStrategy, MixedStrategy
 from config import Player
-from torchrl.envs.libs.dm_control import DMControlEnv
 
 
 class BeliefState:
@@ -119,32 +116,6 @@ def generate_random_pure_strategy(player: Player, env: FlipItEnv) -> torch.Tenso
         belief_state.update_belief(PlayerTargetPair(player=player, target_node=target_node))
 
     return torch.tensor(pure_strategy, dtype=torch.int32)
-
-"""
-def run_simulation(
-    defender_strategy: MixedStrategy,
-    attacker_strategy: PureStrategy,
-    env: FlipItEnv,
-) -> tuple[float, float]:
-    
-    Runs one game simulation.
-
-    Args:
-        defender_strategy: The Defender's mixed strategy.
-        attacker_strategy: The Attacker's pure strategy.
-        env: The FlipIt environment instance.
-
-    Returns:
-        A tuple (final_defender_cumulative_reward, final_attacker_cumulative_reward).
-    
-    env.reset()
-    for step in range(env.m):
-        defender_action = defender_strategy.get_action(step)
-        attacker_action = attacker_strategy.get_action(step)
-        _ = env.step(defender_action, attacker_action)
-
-    return env.cumulative_rewards[Player.defender], env.cumulative_rewards[Player.attacker]
-"""
 
 
 class Action(Enum):

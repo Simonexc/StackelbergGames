@@ -9,7 +9,8 @@ import wandb
 from dotenv import dotenv_values
 
 from environments.flipit_geometric import FlipItMap, FlipItEnv
-from algorithms.simple_nn import CombinedPolicy, TrainableAgentPolicy, AgentPolicy, MultiAgentPolicy
+from algorithms.simple_nn import TrainableNNAgentPolicy, NNAgentPolicy
+from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy
 from algorithms.generator import AgentGenerator
 from config import TrainingConfig, LossConfig, EnvConfig
 from utils import train_stage
@@ -45,7 +46,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
 
     num_nodes = flipit_map.num_nodes
 
-    defender_agent = TrainableAgentPolicy(
+    defender_agent = TrainableNNAgentPolicy(
         num_nodes=num_nodes,
         player_type=0,
         embedding_size=32,
@@ -61,7 +62,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
         embedding_size=32,
         run_name=run_name,
         policy_generator=AgentGenerator(
-            TrainableAgentPolicy,
+            TrainableNNAgentPolicy,
             {
                 "num_nodes": num_nodes,
                 "player_type": 1,

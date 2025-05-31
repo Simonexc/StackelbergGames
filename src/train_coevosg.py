@@ -9,8 +9,8 @@ import wandb
 from dotenv import dotenv_values
 
 from environments.flipit_geometric import FlipItMap, FlipItEnv
-from algorithms.simple_nn import CombinedPolicy
-from algorithms.coevosg2 import CoevoSGAttackerAgent, CoevoSGDefenderAgent
+from algorithms.generic_policy import CombinedPolicy
+from algorithms.coevosg import CoevoSGAttackerAgent, CoevoSGDefenderAgent
 from algorithms.generator import AgentGenerator
 from config import EnvConfig, CoevoSGConfig
 from utils import train_stage_coevosg

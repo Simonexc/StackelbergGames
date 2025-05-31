@@ -7,6 +7,7 @@ from .flipit_geometric import FlipItEnv
 from config import Player
 from torchrl.envs.libs.dm_control import DMControlEnv
 
+
 class Renderer:
     def __init__(self, env: FlipItEnv, seed: int | None = None) -> None:
         self._seed = seed
