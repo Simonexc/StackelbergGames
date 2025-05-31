@@ -1,0 +1,30 @@
+player_turns_attacker: 10
+total_steps_per_turn_attacker: 50000
+epochs_per_batch_attacker: 10
+steps_per_batch_attacker: 1024
+sub_batch_size_attacker: 512
+
+clip_epsilon_attacker: 0.35
+gamma_attacker: 0.99
+lmbda_attacker: 0.95
+entropy_eps_attacker: 0.08
+critic_coef_attacker:  0.6
+learning_rate_attacker: 0.002
+max_grad_norm_attacker: 0.15
+
+player_turns_defender: 10
+total_steps_per_turn_defender: 50000
+epochs_per_batch_defender: 10
+steps_per_batch_defender: 1024
+sub_batch_size_defender: 512
+
+clip_epsilon_defender: 0.35
+gamma_defender: 0.99
+lmbda_defender: 0.95
+entropy_eps_defender: 0.08
+critic_coef_defender:  0.6
+learning_rate_defender: 0.002
+max_grad_norm_defender: 0.15
+
+path_to_map: "test_map2.pth"
+num_steps: 5

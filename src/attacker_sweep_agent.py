@@ -1,0 +1,42 @@
+import argparse
+import multiprocessing
+from functools import partial
+
+from train_attacker import training_loop
+
+import torch
+import wandb
+from dotenv import dotenv_values
+
+
+if __name__ == "__main__":
+    # get arguements
+    parser = argparse.ArgumentParser(description="Training script for FlipIt")
+    parser.add_argument(
+        "sweep",
+        type=str,
+        help="Path to config file",
+    )
+
+    args = parser.parse_args()
+
+    env_config = dotenv_values("../.env")
+
+    # General settings defining environment
+    is_fork = multiprocessing.get_start_method() == "fork"
+    device = (
+        torch.device(0)
+        if torch.cuda.is_available() and not is_fork
+        else torch.device("cpu")
+    )
+    print(f"Using device: {device}")
+    cpu_cores = multiprocessing.cpu_count()
+    print(f"Creating {cpu_cores} processes.")
+
+    train = partial(
+        training_loop,
+        device=device,
+        cpu_cores=cpu_cores,
+    )
+
+    wandb.agent(args.sweep, train, count=None, entity=env_config["WANDB_ENTITY"], project=env_config["WANDB_PROJECT"])

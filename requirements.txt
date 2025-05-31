@@ -1,0 +1,10 @@
+matplotlib
+networkx
+numpy
+torch
+tqdm
+torchrl
+tensordict
+
+wandb
+python-dotenv

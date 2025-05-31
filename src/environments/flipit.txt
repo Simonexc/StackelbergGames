@@ -1,0 +1,24 @@
+Rules:
+1. Flip action attempts to take control of a node:
+    a) Flip action has associated cost for a given node; the cost is incurred regardless of outcome of the action.
+    b) If a node is controlled by the player making the flip, it remains theirs.
+    c) If a node is flipped by both players and for both players this node is reachable (Rule 1.e), the owner of that node remains unchanged.
+    d) If a node is reachable (Rule 1.e) and situation from Rule 1.c does not occur, it becomes theirs.
+    e) Player can only flip a node if it is reachable for them:
+        i) For attacker, any entry node is reachable (marked with green in the graph).
+        ii) For attacker, any node (other than entry node) is reachable if and only if they control at least one predecessor of the node.
+        iii) For defender, any node is reachable if and only if they control at least one successor of the node.
+        iv) Reachability is evaluated before any flip actions are performed.
+    f) The player is not aware whether the flip was successful or not.
+2. Observe action reveals the current owner of a node:
+    a) Observe action has no cost.
+    b) The observe action is performed always after flip action.
+    c) The player can observe any node, regardless of reachability.
+    d) The observe action is always successful and the player is aware of the result.
+3. At a given step, each player can perform one action (flip or observe) on one node.
+4. Both players perform actions simultaneously.
+5. After each step, both players receive rewards for controlling nodes reduced by costs of actions.
+    a) Each controlled node gives a reward specified for that node to the player controlling it.
+6. Both players have full information about the topology of the graph and the rewards/costs for each node.
+6. The game ends after m steps.
+    a) The player with the highest cumulative reward wins.

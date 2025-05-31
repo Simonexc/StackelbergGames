@@ -1,0 +1,53 @@
+name: single_attacker
+method: bayes
+metric:
+  goal: maximize
+  name: eval/reward_attacker_sum
+parameters:
+  total_steps:
+    value: 100000
+  num_epochs:
+    distribution: q_uniform
+    min: 5
+    max: 20
+  steps_per_batch:
+    distribution: q_log_uniform_values
+    min: 256
+    max: 4096
+  steps_per_sub_batch:
+    distribution: q_log_uniform_values
+    min: 16
+    max: 128
+
+  lr:
+    distribution: log_uniform_values
+    min: 0.000001
+    max: 0.1
+  max_grad_norm:
+    distribution: uniform
+    min: 0.0
+    max: 1.0
+
+  clip_epsilon:
+    distribution: uniform
+    min: 0.0
+    max: 0.5
+  gamma:
+    value: 0.99
+  lmbda:
+    distribution: uniform
+    min: 0.8
+    max: 0.9999
+  entropy_eps:
+    distribution: uniform
+    min: 0.0
+    max: 0.5
+  critic_coef:
+    distribution: uniform
+    min: 0.0
+    max: 1.0
+
+  path_to_map:
+    value: "test_map2.pth"
+  num_steps:
+    value: 5
