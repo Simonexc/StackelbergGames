@@ -5,6 +5,7 @@ torch
 tqdm
 torchrl
 tensordict
+torch_geometric
 
 wandb
 python-dotenv

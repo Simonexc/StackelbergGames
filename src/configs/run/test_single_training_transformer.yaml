@@ -28,5 +28,5 @@ max_grad_norm_defender: 1.5
 
 use_transformer_backbone: True
 
-path_to_map: "test_map3.pth"
-num_steps: 15
+path_to_map: "test_map4.pth"
+num_steps: 20
