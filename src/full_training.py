@@ -37,14 +37,18 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     defender_fnn, attacker_fnn = training_loop_nn(device, cpu_cores, run_name+"fnn", config_fnn)
 
     # Train attacker agent using CoevoSG policy
-    defender_coevosg, attacker_coevosg = training_loop_coevosg(device, cpu_cores, run_name+"coevosg", config_fnn)
+    defender_coevosg, attacker_coevosg = training_loop_coevosg("cpu", cpu_cores, run_name+"coevosg", config_fnn)
 
     env_config = EnvConfig.from_dict(config)
-    flipit_map = FlipItMap.load(env_config.path_to_map, device)
-    env = FlipItEnv(flipit_map, env_config.num_steps, device)
+    flipit_map = FlipItMap.load(env_config.path_to_map, "cpu")
+    env = FlipItEnv(flipit_map, env_config.num_steps, "cpu")
 
-    random_agent = RandomAgent(num_nodes=flipit_map.num_nodes, player_type=1, device=device, run_name="test")
-    greedy_oracle_agent = GreedyOracleAgent(num_nodes=flipit_map.num_nodes, total_steps=env.num_steps, player_type=1, device=device, run_name="test", env_map=flipit_map)
+    random_agent = RandomAgent(num_nodes=flipit_map.num_nodes, player_type=1, device="cpu", run_name="test")
+    greedy_oracle_agent = GreedyOracleAgent(num_nodes=flipit_map.num_nodes, total_steps=env.num_steps, player_type=1, device="cpu", run_name="test", env_map=flipit_map)
+    defender_trans = defender_trans.to("cpu")
+    attacker_trans = attacker_trans.to("cpu")
+    defender_fnn = defender_fnn.to("cpu")
+    attacker_fnn = attacker_fnn.to("cpu")
 
     results = compare_agent_pairs(
         [
