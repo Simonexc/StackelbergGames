@@ -37,6 +37,8 @@ if __name__ == "__main__":
         training_loop,
         device=device,
         cpu_cores=cpu_cores,
+        player=1,  # Attacker
+        run_name=None,  # Will be set by wandb
     )
 
     wandb.agent(args.sweep, train, count=None, entity=env_config["WANDB_ENTITY"], project=env_config["WANDB_PROJECT"])

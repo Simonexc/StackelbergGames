@@ -8,12 +8,38 @@ from .flipit_geometric import FlipItEnv
 from config import Player
 
 
+class Action(Enum):
+    flip = 0
+    observe = 1
+
+    @classmethod
+    def random(cls) -> "Action":
+        return cls(random.choice(list(cls.__members__.values())))
+
+
+class ActionTargetPair(NamedTuple):
+    action: Action
+    target_node: int
+
+
+class PlayerTargetPair(NamedTuple):
+    player: Player
+    target_node: int
+
+
+class PlayerActionTargetPair(NamedTuple):
+    player: Player
+    action: Action
+    target_node: int
+
+
 class BeliefState:
-    def __init__(self, player: Player, env: FlipItEnv, believed_node_owners: torch.Tensor | None = None) -> None:
-        self.believed_node_owners = torch.full((env.map.num_nodes,), Player.defender.value, dtype=torch.bool) if believed_node_owners is None else believed_node_owners
+    def __init__(self, player: Player, env: FlipItEnv, device: torch.device, believed_node_owners: torch.Tensor | None = None) -> None:
+        self.believed_node_owners = torch.full((env.map.num_nodes,), Player.defender.value, dtype=torch.bool, device=device) if believed_node_owners is None else believed_node_owners
         self.beliefs_history: list[tuple[Player, PlayerTargetPair] | None] = []
         self.player = player
         self.env = env
+        self.device = device
 
     @classmethod
     def from_observation_history(cls, player: Player, env: FlipItEnv, observation_history: list[PlayerTargetPair | None], believed_node_owners: torch.Tensor | None = None) -> "BeliefState":
@@ -109,35 +135,10 @@ def generate_random_pure_strategy(player: Player, env: FlipItEnv) -> torch.Tenso
     """
 
     pure_strategy: list[int] = []
-    belief_state = BeliefState(player, env)
+    belief_state = BeliefState(player, env, env.device)
     for step in range(env.num_steps):
         target_node = random.choice(belief_state.nodes_reachable())
         pure_strategy.append(target_node)
         belief_state.update_belief(PlayerTargetPair(player=player, target_node=target_node))
 
     return torch.tensor(pure_strategy, dtype=torch.int32)
-
-
-class Action(Enum):
-    flip = 0
-    observe = 1
-
-    @classmethod
-    def random(cls) -> "Action":
-        return cls(random.choice(list(cls.__members__.values())))
-
-
-class ActionTargetPair(NamedTuple):
-    action: Action
-    target_node: int
-
-
-class PlayerTargetPair(NamedTuple):
-    player: Player
-    target_node: int
-
-
-class PlayerActionTargetPair(NamedTuple):
-    player: Player
-    action: Action
-    target_node: int

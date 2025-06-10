@@ -1,20 +1,20 @@
-name: single_attacker_entropy_min
+name: single_attacker_transformer
 method: bayes
 metric:
-  goal: minimize
-  name: train/entropy_attacker
+  goal: maximize
+  name: eval/reward_attacker_mean
 parameters:
   player_turns_attacker:
     value: 1
   total_steps_per_turn_attacker:
-    value: 200000
+    value: 300000
   epochs_per_batch_attacker:
     distribution: q_uniform
     min: 2
     max: 20
   steps_per_batch_attacker:
     distribution: q_log_uniform_values
-    min: 1024
+    min: 512
     max: 4096
   sub_batch_size_attacker:
     distribution: q_log_uniform_values
@@ -28,7 +28,7 @@ parameters:
   max_grad_norm_attacker:
     distribution: uniform
     min: 0.0
-    max: 1.0
+    max: 2.0
 
   clip_epsilon_attacker:
     distribution: uniform

@@ -11,7 +11,7 @@ from torchrl.data.replay_buffers.storages import LazyTensorStorage
 from torchrl.envs import EnvBase
 
 from config import TrainingConfig
-from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy
+from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy, BaseAgent
 
 
 def create_replay_buffer(config: TrainingConfig) -> ReplayBuffer:
@@ -120,3 +120,56 @@ def train_stage_coevosg(
     combined_policy.single_run(combined_policy.attacker_module.env, 1)
 
     pbar.update(1)
+
+
+def compare_agent_pairs(agent_pairs: list[tuple[BaseAgent, BaseAgent, str]], attacker_agents: list[tuple[BaseAgent, str]], env: EnvBase, print_results: bool = True) -> dict[str, float | None]:
+    """
+    Compare each defender against all attackers using CombinedPolicy.single_run.
+    If a policy is MultiAgentPolicy, compare against all its agents and average the result.
+    agent_pairs: list of (defender, attacker, description) tuples
+    env: environment to use for evaluation
+    num_runs: number of single_run evaluations to average
+    print_results: whether to print the results
+    Returns: results as a list of dicts
+    """
+    results = {}
+    all_defender_agents = [(pair[0], pair[2]) for pair in agent_pairs]
+    all_attacker_agents = [(pair[1], pair[2]) for pair in agent_pairs] + attacker_agents
+    for i, (defender, def_desc) in enumerate(all_defender_agents):
+
+        defender_rewards = []
+        for j, (attacker, att_desc) in enumerate(all_attacker_agents):
+            # Handle MultiAgentPolicy for defender
+            def_agents = defender.policies if isinstance(defender, MultiAgentPolicy) else [defender]
+            att_agents = attacker.policies if isinstance(attacker, MultiAgentPolicy) else [attacker]
+            def_rewards, att_rewards = [], []
+            for def_agent in def_agents:
+                for att_agent in att_agents:
+                    combined = CombinedPolicy(def_agent, att_agent)
+                    reward = combined.single_run(env, current_player=0, add_logs=False)
+                    def_rewards.append(reward[..., 0].sum().item())
+                    att_rewards.append(reward[..., 1].sum().item())
+
+            result = {
+                f'{def_desc}/{att_desc}/avg': torch.tensor(def_rewards).mean().item(),
+                f"{def_desc}/{att_desc}/std": torch.tensor(def_rewards).std().item() if len(att_agents) > 1 else None,
+            }
+            results.update(result)
+            defender_rewards.append(result[f'{def_desc}/{att_desc}/avg'])
+            if print_results:
+                out_string = f"Defender: {def_desc} vs Attacker: {att_desc} => Defender avg reward: {result[f'{def_desc}/{att_desc}/avg']:.4f}"
+                if result[f"{def_desc}/{att_desc}/std"] is not None:
+                    out_string += f" ({result[f"{def_desc}/{att_desc}/std"]:.4f})"
+                print(out_string)
+        result = {
+            f'{def_desc}/avg': torch.tensor(defender_rewards).mean().item(),
+            f'{def_desc}/std': torch.tensor(defender_rewards).std().item() if len(defender_rewards) > 1 else None,
+        }
+        results.update(result)
+        if print_results:
+            out_string = f"Defender: {def_desc} => Avg reward: {result[f'{def_desc}/avg']:.4f}"
+            if result[f'{def_desc}/std'] is not None:
+                out_string += f" ({result[f'{def_desc}/std']:.4f})"
+            print(out_string)
+
+    return results

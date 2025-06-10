@@ -62,6 +62,11 @@ class TrainingConfig(FromDictMixin):
 
 
 @dataclass
+class AgentNNConfig(FromDictMixin):
+    embedding_size: int = 32
+
+
+@dataclass
 class LossConfig(FromDictMixin):
     clip_epsilon: float
     gamma: float
@@ -87,4 +92,19 @@ class CoevoSGConfig(FromDictMixin):
     mutation_prob: float = 0.5
     selection_pressure: float = 0.9
     attacker_eval_top_n: int = 10
-    no_improvement_limit: int = 100
+    no_improvement_limit: int = 40
+
+
+@dataclass
+class BackboneConfig(FromDictMixin):
+    use_transformer: bool
+    d_model: int = 32 * 4
+    num_head: int = 8
+    num_layers: int = 2
+    dropout: float = 0.1
+    hidden_size: int = 32
+
+
+@dataclass
+class HeadConfig(FromDictMixin):
+    hidden_size: int = 64

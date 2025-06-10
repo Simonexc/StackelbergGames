@@ -12,11 +12,13 @@ from environments.flipit_geometric import FlipItMap, FlipItEnv
 from algorithms.simple_nn import TrainableNNAgentPolicy, NNAgentPolicy
 from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy
 from algorithms.generator import AgentGenerator
-from config import TrainingConfig, LossConfig, EnvConfig, Player
+from config import TrainingConfig, LossConfig, EnvConfig, Player, AgentNNConfig, BackboneConfig, HeadConfig
 from utils import train_agent
 
 
 env_config = dotenv_values("../.env")
+
+EMBEDDING_SIZE = 32
 
 """
 https://www.ijcai.org/proceedings/2024/0880.pdf
@@ -38,8 +40,11 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
     env_config_ = EnvConfig.from_dict(config)
     training_config = TrainingConfig.from_dict(config, suffix=f"_{player_name}")
     loss_config = LossConfig.from_dict(config, suffix=f"_{player_name}")
+    agent_config = AgentNNConfig.from_dict(config)
+    backbone_config = BackboneConfig.from_dict(config, suffix=f"_backbone")
+    head_config = HeadConfig.from_dict(config, suffix=f"_head")
 
-    flipit_map = FlipItMap.load(env_config_.path_to_map)
+    flipit_map = FlipItMap.load(env_config_.path_to_map, device)
     env = FlipItEnv(flipit_map, env_config_.num_steps, device)
 
     num_nodes = flipit_map.num_nodes
@@ -47,18 +52,20 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
     if player == 0:
         defender_agent = TrainableNNAgentPolicy(
             num_nodes=num_nodes,
+            total_steps=env.num_steps,
             player_type=0,
-            embedding_size=32,
             device=device,
             loss_config=loss_config,
             training_config=training_config,
             run_name=run_name,
+            agent_config=agent_config,
+            backbone_config=backbone_config,
+            head_config=head_config,
         )
         attacker_agent = MultiAgentPolicy(
-            action_size=num_nodes,
+            num_nodes=num_nodes,
             player_type=1,
             device=device,
-            embedding_size=32,
             policy_generator=AgentGenerator(
                 NNAgentPolicy,
                 {}
@@ -68,19 +75,26 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
     else:
         defender_agent = NNAgentPolicy(
             num_nodes=num_nodes,
+            total_steps=env.num_steps,
             player_type=0,
-            embedding_size=32,
+            backbone_config=backbone_config,
+            head_config=head_config,
+            agent_config=agent_config,
             device=device,
             run_name=run_name,
         )
         attacker_agent = TrainableNNAgentPolicy(
             num_nodes=num_nodes,
+            total_steps=env.num_steps,
             player_type=1,
-            embedding_size=32,
             device=device,
             loss_config=loss_config,
             training_config=training_config,
             run_name=run_name,
+            backbone_config=backbone_config,
+            head_config=head_config,
+            agent_config=agent_config,
+            #scheduler_steps=training_config.total_steps_per_turn // training_config.steps_per_batch + 5,
         )
 
     combined_policy = CombinedPolicy(

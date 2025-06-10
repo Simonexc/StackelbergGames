@@ -1,3 +1,5 @@
+from abc import ABC, abstractmethod
+
 import torch
 import numpy as np
 from torch import nn
@@ -11,47 +13,169 @@ from torchrl.objectives.value import GAE
 from torchrl.data.replay_buffers import ReplayBuffer
 import wandb
 
-from config import TrainingConfig, LossConfig
+from config import TrainingConfig, LossConfig, HeadConfig, AgentNNConfig, BackboneConfig
 from .base import BaseAgent, BaseTrainableAgent
 
 
 class Backbone(nn.Module):
-    def __init__(self, num_nodes: int, embedding_size: int, player_type: int, device: torch.device | str) -> None:
+    def __init__(self, num_nodes: int, num_steps: int, embedding_size: int, player_type: int, device: torch.device | str, hidden_size: int) -> None:
         super().__init__()
 
         self.player_type = player_type
+        self.num_steps = num_steps
         self.num_nodes = num_nodes
+        self.embedding_size = embedding_size
+        self.device = device
+
         self.feature_extractor = nn.Sequential(
-            nn.Linear(self.num_nodes + 1, 32, device=device),
+            nn.Linear(self.num_nodes + 1 + (self.num_nodes*2 + 1), hidden_size, device=device),
             nn.ReLU(),
-            nn.Linear(32, embedding_size, device=device),
+            nn.Linear(hidden_size, embedding_size, device=device),
             nn.ReLU(),
         )
 
     def to_module(self) -> TensorDictModule:
         return TensorDictModule(
-            self, in_keys=["step_count", "observed_node_owners"], out_keys=["embedding"]
+            self, in_keys=["step_count", "observed_node_owners", "actions_seq"], out_keys=["embedding"]
         )
 
-    def forward(self, current_step: torch.Tensor, observed_node_owners: torch.Tensor) -> torch.Tensor:
-        # we need to expand the current step to match the batch size of the observed node owners
-        current_step = current_step / self.num_nodes - 0.5
+    def forward(self, step_count: torch.Tensor, observed_node_owners: torch.Tensor, actions_seq: torch.Tensor) -> torch.Tensor:
+        """
+        Forward method that processes the current step and observed node owners to produce an embedding.
+        """
+        # Normalize the current step
+        current_step_seq_normalized = step_count / self.num_steps - 0.5
 
-        observed_node_owners = observed_node_owners[..., self.player_type, :] / 2
-        # we need to concatenate the two tensors
-        x = torch.cat([current_step, observed_node_owners], dim=-1)
-        return self.feature_extractor(x)
+        # Process observed node owners
+        observed_node_owners = observed_node_owners[..., self.player_type, -1, :].float()
+
+        # One-Hot encode actions
+        actions_seq = (actions_seq[..., self.player_type, -1] + 1).long()  # Shift actions to start from 0
+        actions_seq_one_hot = torch.nn.functional.one_hot(actions_seq, num_classes=self.num_nodes*2 + 1).float()
+
+        # Concatenate the two tensors
+        x = torch.cat([current_step_seq_normalized, observed_node_owners, actions_seq_one_hot], dim=-1)
+        out = self.feature_extractor(x)
+
+        return out
+
+
+class ObservationEmbedding(nn.Module):
+    def __init__(self, num_nodes: int, embedding_size: int, device: torch.device | str) -> None:
+        super().__init__()
+
+        self.linear_projection = nn.Linear(num_nodes + 1 + (num_nodes*2 + 1), embedding_size, device=device)
+        self.activation = nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward method to produce an embedding based on observations.
+        """
+        return self.activation(self.linear_projection(x))
+
+
+class BackboneTransformer(nn.Module):
+    def __init__(
+        self,
+        num_nodes: int,
+        num_steps: int,
+        embedding_size: int,
+        player_type: int,
+        device: torch.device | str,
+        d_model: int,
+        num_head: int,
+        num_layers: int,
+        dropout: float,
+    ) -> None:
+        super().__init__()
+
+        self.player_type = player_type
+        self.num_steps = num_steps
+        self.embedding_size = embedding_size
+        self.device = device
+
+        self.num_nodes = num_nodes
+        self.d_model = d_model
+
+        self.obs_embedding = ObservationEmbedding(
+            num_nodes=self.num_nodes,
+            embedding_size=self.embedding_size,
+            device=device,
+        )
+        # Learned Positional Encodings (as per DTQN)
+        self.positional_encoder = nn.Embedding(self.num_steps+1, self.embedding_size, device=self.device)
+
+        transformer_layer = nn.TransformerEncoderLayer(
+            d_model=self.embedding_size,
+            nhead=num_head,
+            dim_feedforward=d_model,
+            dropout=dropout,
+            activation="relu",
+            batch_first=True,
+            norm_first=False,
+            device=device,
+        )
+        self.transformer_encoder = nn.TransformerEncoder(
+            encoder_layer=transformer_layer,
+            num_layers=num_layers,
+            norm=None,  # No final LayerNorm after all N blocks; each block has its own
+        )
+
+    def _generate_causal_mask(self, size: int) -> torch.Tensor:
+        """Generates a square causal mask for self-attention."""
+        mask = torch.triu(torch.full((size, size), float('-inf'), device=self.device), diagonal=1)
+        return mask
+
+    def to_module(self) -> TensorDictModule:
+        return TensorDictModule(
+            self, in_keys=["step_count_seq", "observed_node_owners", "actions_seq"], out_keys=["embedding"]
+        )
+
+    def forward(self, current_step_seq: torch.Tensor, observed_node_owners: torch.Tensor, actions_seq: torch.Tensor) -> torch.Tensor:
+        """
+        Forward method that processes the current step and observed node owners to produce an embedding.
+        """
+        # Normalize the current step
+        current_step_seq_normalized = current_step_seq / self.num_steps
+
+        # Process observed node owners
+        observed_node_owners = observed_node_owners[..., self.player_type, :, :].float()
+
+        # One-Hot encode the actions
+        actions_seq = (actions_seq[..., self.player_type, :] + 1).long()  # Shift actions to start from 0
+        actions_seq_one_hot = torch.nn.functional.one_hot(actions_seq, num_classes=self.num_nodes*2+1).float()
+
+        # Concatenate the two tensors
+        x = torch.cat([current_step_seq_normalized.unsqueeze(-1), observed_node_owners, actions_seq_one_hot], dim=-1)
+
+        expanded = False
+        if x.ndim == 2:
+            expanded = True
+            x = x.unsqueeze(0)
+        embedded_obs = self.obs_embedding(x)
+        positions_idx = torch.arange(0, self.num_steps+1, dtype=torch.long, device=self.device)
+        positions_idx = positions_idx.unsqueeze(0).expand(embedded_obs.size(0), -1)  # Expand to batch size
+
+        x = embedded_obs + self.positional_encoder(positions_idx)
+
+        causal_mask = self._generate_causal_mask(self.num_steps+1)
+
+        output_sequence = self.transformer_encoder(x, mask=causal_mask)
+        output_sequence = output_sequence[..., -1, :]  # Take the last step's embedding
+
+        if expanded:
+            output_sequence = output_sequence.squeeze(0)
+        return output_sequence
 
 
 class ActorHead(nn.Module):
-    def __init__(self, num_nodes: int, embedding_size: int, device: torch.device | str, action_spec: TensorSpec) -> None:
+    def __init__(self, embedding_size: int, device: torch.device | str, action_spec: Bounded, hidden_size: int) -> None:
         super().__init__()
 
-        self.num_nodes = num_nodes
         self.actor_head = nn.Sequential(
-            nn.Linear(embedding_size, num_nodes, device=device),
-            #nn.ReLU(),
-            #nn.Linear(256, num_nodes, device=device),
+            nn.Linear(embedding_size, hidden_size, device=device),
+            nn.ReLU(),
+            nn.Linear(hidden_size, action_spec.high+1, device=device),
         )
         self.do_sample = True
         self.action_spec = action_spec
@@ -73,14 +197,14 @@ class ActorHead(nn.Module):
 
 
 class ValueHead(nn.Module):
-    def __init__(self, embedding_size: int, device: torch.device | str) -> None:
+    def __init__(self, embedding_size: int, device: torch.device | str, hidden_size: int) -> None:
         super().__init__()
 
         self.device = device
         self.value_head = nn.Sequential(
-            nn.Linear(embedding_size, 1, device=device),
-            #nn.ReLU(),
-            #nn.Linear(256, 1, device=device),
+            nn.Linear(embedding_size, hidden_size, device=device),
+            nn.ReLU(),
+            nn.Linear(hidden_size, 1, device=device),
         )
 
     def to_module(self) -> ValueOperator:
@@ -97,15 +221,17 @@ class NNAgentPolicy(BaseAgent):
         self,
         num_nodes: int,
         player_type: int,
-        embedding_size: int,
+        head_config: HeadConfig,
+        backbone_config: BackboneConfig,
+        agent_config: AgentNNConfig,
         device: torch.device | str,
         run_name: str,
+        total_steps: int,
         agent_id: int | None = None,
     ) -> None:
         super().__init__(
-            action_size=num_nodes,
+            num_nodes=num_nodes,
             player_type=player_type,
-            embedding_size=embedding_size,
             device=device,
             run_name=run_name,
             agent_id=agent_id,
@@ -114,25 +240,42 @@ class NNAgentPolicy(BaseAgent):
         action_spec = Bounded(
             shape=torch.Size((1,)),
             low=0,
-            high=self.action_size - 1,
+            high=self.num_nodes*2 - 1,
             dtype=torch.int32,
         )
 
-        backbone = Backbone(
-            num_nodes=self.action_size,
-            embedding_size=self.embedding_size,
-            player_type=player_type,
-            device=self._device,
-        )
+        if backbone_config.use_transformer:
+            backbone = BackboneTransformer(
+                num_steps=total_steps,
+                embedding_size=agent_config.embedding_size,
+                player_type=player_type,
+                device=self._device,
+                num_nodes=self.num_nodes,
+                d_model=backbone_config.d_model,
+                num_head=backbone_config.num_head,
+                num_layers=backbone_config.num_layers,
+                dropout=backbone_config.dropout,
+            )
+        else:
+            backbone = Backbone(
+                num_nodes=num_nodes,
+                num_steps=total_steps,
+                embedding_size=agent_config.embedding_size,
+                player_type=player_type,
+                device=self._device,
+                hidden_size=backbone_config.hidden_size,
+            )
+
         actor_head = ActorHead(
-            num_nodes=self.action_size,
-            embedding_size=self.embedding_size,
+            embedding_size=agent_config.embedding_size,
             device=self._device,
             action_spec=action_spec,
+            hidden_size=head_config.hidden_size,
         )
         value_head = ValueHead(
-            embedding_size=self.embedding_size,
+            embedding_size=agent_config.embedding_size,
             device=self._device,
+            hidden_size=head_config.hidden_size,
         )
 
         self.agent = ActorValueOperator(
@@ -150,11 +293,14 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
         self,
         num_nodes: int,
         player_type: int,
-        embedding_size: int,
         device: torch.device | str,
         run_name: str,
+        total_steps: int,
         training_config: TrainingConfig,
         loss_config: LossConfig,
+        head_config: HeadConfig,
+        backbone_config: BackboneConfig,
+        agent_config: AgentNNConfig,
         agent_id: int | None = None,
         scheduler_steps: int | None = None,
         add_logs: bool = True,
@@ -162,10 +308,13 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
         super().__init__(
             num_nodes=num_nodes,
             player_type=player_type,
-            embedding_size=embedding_size,
             device=device,
             run_name=run_name,
             agent_id=agent_id,
+            total_steps=total_steps,
+            head_config=head_config,
+            backbone_config=backbone_config,
+            agent_config=agent_config,
         )
 
         self._training_config = training_config
@@ -302,6 +451,9 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
 
         reward = tensordict_data["next"]["reward"].mean().item()
         if self._add_logs:
+            total_actions = tensordict_data["action"].numel()
+            flip_actions = (tensordict_data["action"] // self.num_nodes == 0).sum().item() / total_actions
+            observe_actions = (tensordict_data["action"] // self.num_nodes == 1).sum().item() / total_actions
             wandb.log({
                 f"loss/objective_{self.player_name}": np.array(cycle_data["loss_objective"]).mean(),
                 f"loss/critic_{self.player_name}": np.array(cycle_data["loss_critic"]).mean(),
@@ -315,10 +467,13 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
                 f"general/step_{self.player_name}": self.num_steps,
                 f"general/epoch_{self.player_name}": self.num_epochs,
                 f"general/cycle_{self.player_name}": self.num_cycle,
+                f"actions/flip_{self.player_name}": flip_actions,
+                f"actions/observe_{self.player_name}": observe_actions,
             })
 
         self.num_cycle += 1
+        if self.scheduler is not None:
+            self.scheduler.step()
 
         return reward
-
 

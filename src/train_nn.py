@@ -9,10 +9,10 @@ import wandb
 from dotenv import dotenv_values
 
 from environments.flipit_geometric import FlipItMap, FlipItEnv
-from algorithms.simple_nn import TrainableNNAgentPolicy, NNAgentPolicy
+from algorithms.simple_nn import TrainableNNAgentPolicy
 from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy
 from algorithms.generator import AgentGenerator
-from config import TrainingConfig, LossConfig, EnvConfig
+from config import TrainingConfig, LossConfig, EnvConfig, AgentNNConfig, BackboneConfig, HeadConfig
 from utils import train_stage
 
 
@@ -22,7 +22,7 @@ env_config = dotenv_values("../.env")
 https://www.ijcai.org/proceedings/2024/0880.pdf
 https://arxiv.org/pdf/2306.01324
 """
-def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = None, config=None):
+def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = None, config=None, log_wandb: bool = False):
     if not run_name:
         run_name = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-full'
     if config is None:
@@ -38,39 +38,50 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     loss_config_defender = LossConfig.from_dict(config, suffix="_defender")
     training_config_attacker = TrainingConfig.from_dict(config, suffix="_attacker")
     loss_config_attacker = LossConfig.from_dict(config, suffix="_attacker")
+    agent_config = AgentNNConfig.from_dict(config)
+    backbone_config = BackboneConfig.from_dict(config, suffix=f"_backbone")
+    head_config = HeadConfig.from_dict(config, suffix=f"_head")
 
     assert training_config_attacker.player_turns == training_config_defender.player_turns
 
-    flipit_map = FlipItMap.load(env_config_.path_to_map)
+    flipit_map = FlipItMap.load(env_config_.path_to_map, device)
     env = FlipItEnv(flipit_map, env_config_.num_steps, device)
 
     num_nodes = flipit_map.num_nodes
 
     defender_agent = TrainableNNAgentPolicy(
         num_nodes=num_nodes,
+        total_steps=env.num_steps,
         player_type=0,
-        embedding_size=32,
         device=device,
         loss_config=loss_config_defender,
         training_config=training_config_defender,
+        agent_config=agent_config,
+        backbone_config=backbone_config,
+        head_config=head_config,
         run_name=run_name,
+        add_logs=log_wandb,  # Defender logs during training
     )
     attacker_agent = MultiAgentPolicy(
-        action_size=num_nodes,
+        num_nodes=num_nodes,
         player_type=1,
         device=device,
-        embedding_size=32,
         run_name=run_name,
+        embedding_size=agent_config.embedding_size,
         policy_generator=AgentGenerator(
             TrainableNNAgentPolicy,
             {
                 "num_nodes": num_nodes,
+                "total_steps": env.num_steps,
                 "player_type": 1,
-                "embedding_size": 32,
                 "device": device,
                 "loss_config": loss_config_attacker,
                 "training_config": training_config_attacker,
                 "run_name": run_name,
+                "add_logs": False,  # Attacker does not log during training
+                "agent_config": agent_config,
+                "backbone_config": backbone_config,
+                "head_config": head_config,
             }
         ),
     )
@@ -93,6 +104,8 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
             num_envs=cpu_cores,
             pbar=pbar,
         )
+
+    return defender_agent, attacker_agent
 
 
 if __name__ == "__main__":
@@ -132,4 +145,4 @@ if __name__ == "__main__":
         config=config_content,
         name=run_name_,
     ) as run:
-        training_loop(device, cpu_cores, run_name_, run.config)
+        training_loop(device, cpu_cores, run_name_, run.config, log_wandb=True)
