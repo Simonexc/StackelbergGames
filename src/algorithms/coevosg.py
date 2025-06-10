@@ -79,6 +79,16 @@ class StrategyBase(nn.Module, ABC):
         Should be implemented by subclasses.
         """
 
+    @staticmethod
+    def get_path_name(run_name: str, player_name: str) -> str:
+        """
+        Returns the path name for saving/loading the strategy.
+        """
+        run_folder = os.path.join("saved_models", run_name, player_name)
+        save_path = os.path.join(run_folder, "agent_0.pth")
+        os.makedirs(run_folder, exist_ok=True)
+        return save_path
+
 
 class PureStrategy(StrategyBase):
     def __init__(self, num_nodes: int, pure_strategy: torch.Tensor) -> None:
@@ -168,9 +178,7 @@ class PureStrategy(StrategyBase):
         self.fitness = max_attacker_payoff
 
     def save(self, run_name: str, player_name: str) -> None:
-        run_folder = os.path.join("saved_models", run_name, player_name)
-        save_path = os.path.join(run_folder, "agent_0.pth")
-        os.makedirs(run_folder, exist_ok=True)
+        save_path = self.get_path_name(run_name, player_name)
         torch.save({
             "pure_strategy": self.pure_strategy,
             "fitness": self.fitness,
@@ -366,9 +374,7 @@ class MixedStrategy(StrategyBase):
         self.fitness = corresponding_defender_payoff
 
     def save(self, run_name: str, player_name: str) -> None:
-        run_folder = os.path.join("saved_models", run_name, player_name)
-        save_path = os.path.join(run_folder, "agent_0.pth")
-        os.makedirs(run_folder, exist_ok=True)
+        save_path = self.get_path_name(run_name, player_name)
         torch.save({
             "pure_strategies": torch.stack([strategy.pure_strategy for strategy in self.pure_strategies], dim=0),
             "probabilities": torch.tensor(self.probabilities),

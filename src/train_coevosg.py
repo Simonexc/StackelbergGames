@@ -11,7 +11,7 @@ from dotenv import dotenv_values
 
 from environments.flipit_geometric import FlipItMap, FlipItEnv
 from algorithms.generic_policy import CombinedPolicy
-from algorithms.coevosg import CoevoSGAttackerAgent, CoevoSGDefenderAgent
+from algorithms.coevosg import CoevoSGAttackerAgent, CoevoSGDefenderAgent, StrategyBase
 from algorithms.generator import AgentGenerator
 from config import EnvConfig, CoevoSGConfig
 from utils import train_stage_coevosg
@@ -70,6 +70,8 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     attacker_agent.evaluate_population(defender_agent.population)
     best_fitness = attacker_agent.best_population.fitness
     no_improvement = 0
+    defender_agent.save()
+    attacker_agent.save()
 
     for turn in range(num_turns):
         train_stage_coevosg(combined_policy, pbar)
@@ -86,8 +88,8 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
             print(f"No improvement for {no_improvement} generations, switching roles.")
             break
 
-    defender_agent.load(os.path.join("saved_models", run_name, "defender", "agent_0.pth"))
-    attacker_agent.load(os.path.join("saved_models", run_name, "attacker", "agent_0.pth"))
+    defender_agent.load(StrategyBase.get_path_name(defender_agent.run_name, defender_agent.player_name))
+    attacker_agent.load(StrategyBase.get_path_name(attacker_agent.run_name, attacker_agent.player_name))
     return defender_agent, attacker_agent
 
 
