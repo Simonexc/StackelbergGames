@@ -91,6 +91,17 @@ class StrategyBase(nn.Module, ABC):
         os.makedirs(run_folder, exist_ok=True)
         return save_path
 
+    @abstractmethod
+    def to_simple_data(self) -> dict | list:
+        """Converts the strategy to a simple, picklable Python object."""
+        pass
+
+    @classmethod
+    @abstractmethod
+    def from_simple_data(cls, data: dict | list, num_nodes: int) -> "StrategyBase":
+        """Recreates a strategy instance from simple data."""
+        pass
+
 
 class PureStrategy(StrategyBase):
     def __init__(self, num_nodes: int, pure_strategy: torch.Tensor) -> None:
@@ -190,6 +201,19 @@ class PureStrategy(StrategyBase):
         data = torch.load(path)
         self.pure_strategy = data["pure_strategy"]
         self.fitness = data["fitness"]
+
+    def to_simple_data(self) -> dict:
+        return {
+            "type": "pure",
+            "strategy": self.pure_strategy.tolist(),
+            "fitness": self.fitness,
+        }
+
+    @classmethod
+    def from_simple_data(cls, data: dict, num_nodes: int) -> "PureStrategy":
+        strategy = cls(num_nodes, torch.tensor(data["strategy"], dtype=torch.int32))
+        strategy.fitness = data["fitness"]
+        return strategy
 
 
 class MixedStrategy(StrategyBase):
@@ -392,6 +416,24 @@ class MixedStrategy(StrategyBase):
         self.probabilities = data["probabilities"].tolist()
         self.fitness = data["fitness"]
 
+    def to_simple_data(self) -> dict:
+        return {
+            "type": "mixed",
+            "strategies": [ps.to_simple_data() for ps in self.pure_strategies],
+            "probabilities": self.probabilities,
+            "fitness": self.fitness,
+        }
+
+    @classmethod
+    def from_simple_data(cls, data: dict, num_nodes: int) -> "MixedStrategy":
+        pure_strategies = [
+            PureStrategy.from_simple_data(ps_data, num_nodes)
+            for ps_data in data["strategies"]
+        ]
+        strategy = cls(num_nodes, pure_strategies, data["probabilities"])
+        strategy.fitness = data["fitness"]
+        return strategy
+
 
 class StrategyGenerator:
     def __init__(self, num_nodes: int, strategy_class: type[StrategyBase]) -> None:
@@ -402,16 +444,34 @@ class StrategyGenerator:
         return self.strategy_class(self.num_nodes, **kwargs)
 
 
+def strategy_from_simple_data(data: dict, num_nodes: int) -> StrategyBase:
+    if data["type"] == "pure":
+        return PureStrategy.from_simple_data(data, num_nodes)
+    elif data["type"] == "mixed":
+        return MixedStrategy.from_simple_data(data, num_nodes)
+    else:
+        raise ValueError(f"Unknown strategy type: {data['type']}")
+
+
 # Worker function for multiprocessing (must be defined at the top level or be a static method)
-def _worker_evaluate_strategy(strategy_to_eval, env_map, env_num_steps, opponent_population, top_n_val):
+def _worker_evaluate_strategy(simple_strategy_to_eval, num_nodes, env_map, env_num_steps, simple_opponent_population,
+                              top_n_val):
+    # 1. Reconstruct all strategy objects from simple data
+    strategy_to_eval = strategy_from_simple_data(simple_strategy_to_eval, num_nodes)
+
+    opponent_population = [
+        strategy_from_simple_data(s_data, num_nodes)
+        for s_data in simple_opponent_population
+    ]
+
+    # 2. Reconstruct the environment
     current_env = FlipItEnv(env_map, env_num_steps)
 
-    # Make a deepcopy of the strategy to avoid any potential race conditions
-    # This ensures the strategy object in the worker is independent
-    strategy_copy = strategy_to_eval.copy()
+    # 3. Perform evaluation
+    strategy_to_eval.evaluate(current_env, opponent_population, top_n_val)
 
-    strategy_copy.evaluate(current_env, opponent_population, top_n_val)
-    return strategy_copy.fitness
+    # 4. Return the resulting fitness
+    return strategy_to_eval.fitness
 
 
 class CoevoSGAgentBase(BaseAgent, ABC):
@@ -496,15 +556,21 @@ class CoevoSGAgentBase(BaseAgent, ABC):
             return
 
         if self.pool and len(self.population) > 1 and opponent_population:
-            worker_with_context = partial(_worker_evaluate_strategy,
-                                          env_map=self.env.map,
-                                          env_num_steps=self.env.num_steps,
-                                          opponent_population=opponent_population,
-                                          top_n_val=self.config.attacker_eval_top_n)
+            # 1. Convert complex objects to simple, picklable data
+            simple_opponent_population = [s.to_simple_data() for s in opponent_population]
 
-            # The iterable for pool.map now only contains the single item that changes per task.
-            # This is massively more efficient.
-            tasks_iterable = self.population
+            # 2. Create the partial function with the simple data
+            worker_with_context = partial(
+                _worker_evaluate_strategy,
+                num_nodes=self.num_nodes,
+                env_map=self.env.map,
+                env_num_steps=self.env.num_steps,
+                simple_opponent_population=simple_opponent_population,
+                top_n_val=self.config.attacker_eval_top_n
+            )
+
+            # 3. The iterable now contains the simple data for each task
+            tasks_iterable = [s.to_simple_data() for s in self.population]
 
             results_fitness = self.pool.map(worker_with_context, tasks_iterable)
 
