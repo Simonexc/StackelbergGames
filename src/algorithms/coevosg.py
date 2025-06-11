@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import copy
 import os
 import multiprocessing
+from functools import partial
 
 import torch
 from torch import nn
@@ -402,12 +403,15 @@ class StrategyGenerator:
 
 
 # Worker function for multiprocessing (must be defined at the top level or be a static method)
-def _worker_evaluate_strategy(args_tuple):
-    strategy_to_eval, env_map, env_num_steps, opponent_population, top_n_val = args_tuple
+def _worker_evaluate_strategy(strategy_to_eval, env_map, env_num_steps, opponent_population, top_n_val):
     current_env = FlipItEnv(env_map, env_num_steps)
 
-    strategy_to_eval.evaluate(current_env, opponent_population, top_n_val)
-    return strategy_to_eval.fitness  # Fitness is set in-place, return it for aggregation
+    # Make a deepcopy of the strategy to avoid any potential race conditions
+    # This ensures the strategy object in the worker is independent
+    strategy_copy = strategy_to_eval.copy()
+
+    strategy_copy.evaluate(current_env, opponent_population, top_n_val)
+    return strategy_copy.fitness
 
 
 class CoevoSGAgentBase(BaseAgent, ABC):
@@ -486,24 +490,23 @@ class CoevoSGAgentBase(BaseAgent, ABC):
 
     def evaluate_population(self, opponent_population: list[StrategyBase]) -> None:
         """ Evaluates fitness for all individuals in a specified population. """
-        tasks = []
-
-        for strategy_in_pop in self.population:
-            # The worker needs env, opponent_population, top_n, and type
-            tasks.append((
-                strategy_in_pop,
-                self.env.map,  # Pass env instance (must be picklable or worker reconstructs)
-                self.env.num_steps,
-                opponent_population,  # Pass opponent pop (must be picklable or worker reconstructs)
-                self.config.attacker_eval_top_n,  # top_n for attacker eval
-            ))
-
-        num_workers = 0
-        if len(self.population) > 1 and opponent_population:  # Only use MP if tasks exist and opp pop is usable
-            num_workers = min(torch.multiprocessing.cpu_count(), len(self.population), 8)  # Limit max workers e.g. to 8
+        if not opponent_population:
+            for strategy in self.population:
+                strategy.fitness = -float('inf')
+            return
 
         if self.pool and len(self.population) > 1 and opponent_population:
-            results_fitness = self.pool.map(_worker_evaluate_strategy, tasks)
+            worker_with_context = partial(_worker_evaluate_strategy,
+                                          env_map=self.env.map,
+                                          env_num_steps=self.env.num_steps,
+                                          opponent_population=opponent_population,
+                                          top_n_val=self.config.attacker_eval_top_n)
+
+            # The iterable for pool.map now only contains the single item that changes per task.
+            # This is massively more efficient.
+            tasks_iterable = self.population
+
+            results_fitness = self.pool.map(worker_with_context, tasks_iterable)
 
             for i, fitness_val in enumerate(results_fitness):
                 self.population[i].fitness = fitness_val
