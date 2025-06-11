@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import copy
 import os
+import multiprocessing
 
 import torch
 from torch import nn
@@ -420,12 +421,14 @@ class CoevoSGAgentBase(BaseAgent, ABC):
         env: FlipItEnv,
         pop_size: int = 200,
         agent_id: int | None = None,
+        pool: multiprocessing.pool.Pool | None = None,
     ) -> None:
         super().__init__(num_nodes, player_type, device, run_name, agent_id)
 
         self.config = config
         self.pop_size = pop_size
         self.env = env
+        self.pool = pool
 
         self.population: list[StrategyBase] = []
         self.generations_no_improvement = 0
@@ -499,10 +502,8 @@ class CoevoSGAgentBase(BaseAgent, ABC):
         if len(self.population) > 1 and opponent_population:  # Only use MP if tasks exist and opp pop is usable
             num_workers = min(torch.multiprocessing.cpu_count(), len(self.population), 8)  # Limit max workers e.g. to 8
 
-        if num_workers > 1:
-            ctx = torch.multiprocessing.get_context('spawn')
-            with ctx.Pool(processes=num_workers) as pool:
-                results_fitness = pool.map(_worker_evaluate_strategy, tasks)
+        if self.pool and len(self.population) > 1 and opponent_population:
+            results_fitness = self.pool.map(_worker_evaluate_strategy, tasks)
 
             for i, fitness_val in enumerate(results_fitness):
                 self.population[i].fitness = fitness_val

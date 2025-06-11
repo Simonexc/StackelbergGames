@@ -41,52 +41,56 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     env = FlipItEnv(flipit_map, env_config_.num_steps, device)
 
     num_nodes = flipit_map.num_nodes
+    ctx = torch.multiprocessing.get_context('spawn')
 
-    defender_agent = CoevoSGDefenderAgent(
-        num_nodes=num_nodes,
-        player_type=0,
-        device=device,
-        run_name=run_name,
-        config=coevosg_config,
-        env=env,
-    )
-    attacker_agent = CoevoSGAttackerAgent(
-        num_nodes=num_nodes,
-        player_type=1,
-        device=device,
-        run_name=run_name,
-        config=coevosg_config,
-        env=env,
-    )
+    with ctx.Pool(processes=cpu_cores) as pool:
+        defender_agent = CoevoSGDefenderAgent(
+            num_nodes=num_nodes,
+            player_type=0,
+            device=device,
+            run_name=run_name,
+            config=coevosg_config,
+            env=env,
+            pool=pool,
+        )
+        attacker_agent = CoevoSGAttackerAgent(
+            num_nodes=num_nodes,
+            player_type=1,
+            device=device,
+            run_name=run_name,
+            config=coevosg_config,
+            env=env,
+            pool=pool,
+        )
 
-    combined_policy = CombinedPolicy(
-        defender_agent,
-        attacker_agent,
-    )
+        combined_policy = CombinedPolicy(
+            defender_agent,
+            attacker_agent,
+        )
 
-    num_turns = coevosg_config.generations // coevosg_config.gen_per_switch
-    pbar = tqdm(total=num_turns)
-    defender_agent.evaluate_population(attacker_agent.population)
-    attacker_agent.evaluate_population(defender_agent.population)
-    best_fitness = attacker_agent.best_population.fitness
-    no_improvement = 0
-    defender_agent.save()
-    attacker_agent.save()
+        num_turns = coevosg_config.generations // coevosg_config.gen_per_switch
+        pbar = tqdm(total=num_turns)
+        defender_agent.evaluate_population(attacker_agent.population)
+        attacker_agent.evaluate_population(defender_agent.population)
+        best_fitness = attacker_agent.best_population.fitness
+        no_improvement = 0
+        defender_agent.save()
+        attacker_agent.save()
 
-    for turn in range(num_turns):
-        train_stage_coevosg(combined_policy, pbar)
-        new_best_fitness = attacker_agent.best_population.fitness
-        if new_best_fitness > best_fitness:
-            best_fitness = new_best_fitness
-            no_improvement = 0
-            defender_agent.save()
-            attacker_agent.save()
-        else:
-            no_improvement += coevosg_config.gen_per_switch
+        for turn in range(num_turns):
+            train_stage_coevosg(combined_policy, pbar)
+            new_best_fitness = attacker_agent.best_population.fitness
+            if new_best_fitness > best_fitness:
+                best_fitness = new_best_fitness
+                no_improvement = 0
+                defender_agent.save()
+                attacker_agent.save()
+            else:
+                no_improvement += coevosg_config.gen_per_switch
 
-        if no_improvement >= coevosg_config.no_improvement_limit:
-            print(f"No improvement for {no_improvement} generations, switching roles.")
-            break
+            if no_improvement >= coevosg_config.no_improvement_limit:
+                print(f"No improvement for {no_improvement} generations, switching roles.")
+                break
 
     defender_agent.load(StrategyBase.get_path_name(defender_agent.run_name, defender_agent.player_name))
     attacker_agent.load(StrategyBase.get_path_name(attacker_agent.run_name, attacker_agent.player_name))
