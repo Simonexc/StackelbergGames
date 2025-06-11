@@ -130,4 +130,4 @@ if __name__ == "__main__":
         config=config_content,
         name=run_name_,
     ) as run:
-        training_loop(device, cpu_cores, run_name_, run.config)
+        training_loop(torch.device("cpu"), cpu_cores, run_name_, run.config)
