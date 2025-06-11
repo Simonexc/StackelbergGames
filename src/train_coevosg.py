@@ -43,7 +43,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     num_nodes = flipit_map.num_nodes
     ctx = torch.multiprocessing.get_context('spawn')
 
-    with ctx.Pool(processes=cpu_cores) as pool:
+    with ctx.Pool(processes=8) as pool:
         defender_agent = CoevoSGDefenderAgent(
             num_nodes=num_nodes,
             player_type=0,
