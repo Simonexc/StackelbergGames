@@ -1,8 +1,13 @@
+import inspect
+import sys
 from typing import Any, Optional
 from enum import Enum
 from dataclasses import dataclass
 
 import torch
+
+from algorithms import keys_processors
+from environments.config import EnvMapper
 
 
 class Player(Enum):
@@ -79,8 +84,18 @@ class LossConfig(FromDictMixin):
 
 @dataclass
 class EnvConfig(FromDictMixin):
+    env_name: str
     num_steps: int
-    path_to_map: str
+    seed: int
+    num_nodes: int
+
+    def __post_init__(self) -> None:
+        self.env_pair = EnvMapper.from_name(self.env_name)
+
+    def create(self, device: torch.device | str | None = None):
+        map_obj = self.env_pair.value.map_class(self, device=device)
+        env_obj = self.env_pair.value.env_class(self, map_obj, device=device)
+        return map_obj, env_obj
 
 
 @dataclass
@@ -98,11 +113,26 @@ class CoevoSGConfig(FromDictMixin):
 @dataclass
 class BackboneConfig(FromDictMixin):
     use_transformer: bool
+    keys: list[str]
     d_model: int = 32 * 4
     num_head: int = 8
     num_layers: int = 2
     dropout: float = 0.1
     hidden_size: int = 32
+
+    def __post_init__(self) -> None:
+        available_extractors: dict[str, type[keys_processors.TensorDictKeyExtractorBase]] = {
+            name: cls
+            for name, cls in inspect.getmembers(sys.modules[keys_processors.__name__], inspect.isclass)
+            if issubclass(cls, keys_processors.TensorDictKeyExtractorBase) and cls is not keys_processors.TensorDictKeyExtractorBase
+        }
+        self.extractors: list[type[keys_processors.TensorDictKeyExtractorBase]] = []
+
+        for key in self.keys:
+            if key not in available_extractors:
+                raise ValueError(f"Key '{key}' is not a valid extractor. Available keys: {list(available_extractors.keys())}")
+
+            self.extractors.append(available_extractors[key])
 
 
 @dataclass

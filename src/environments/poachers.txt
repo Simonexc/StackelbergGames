@@ -1,0 +1,24 @@
+Rules:
+1. Move action attempts to move player to a neighboring node:
+    a) Move action has a fixed cost associated with it.
+    b) Player can only move to its neighboring nodes.
+    c) Both defender and attacker have the same rules for moving.
+2. Track action allows player to check if and when the opponent last visited this node:
+    a) Track action has no cost.
+    b) Player can track only node that it stands on.
+    c) The track action is always successful and the player is aware of the result.
+    d) Both defender and attacker have the same rules for moving.
+3. Prepare action allows player to increase the reward for the reward node:
+    a) Prepare action has a cost associated with it for a given reward node.
+    b) It increase the value of the reward node by a fixed amount (separate for each node).
+    c) Can only be performed by attacker on reward nodes only if the attacker stands on the node.
+4. Collect action allows player to collect the reward from the reward node:
+    a) Collect action has no cost.
+    b) Can only be performed by attacker on reward nodes only if the attacker stands on the node.
+    c) After performing collect action, the reward node becomes empty and cannot be collected again.
+    d) The same value of the reward is subtracted from the total possible reward of the defender (which is the sum of all reward nodes).
+5. The goal of the game for attackers is to collect as much reward as possible,
+   while for defenders is to prevent attackers from collecting rewards.
+6. The attacker can be caught by the defender if the defender stands on the same node as the attacker.
+7. The game ends when all reward nodes are empty, attacker is caught, or after m steps.
+8. At each turn the player knows at which node it stands and the current step number.

@@ -12,7 +12,6 @@ from dotenv import dotenv_values
 from environments.flipit_geometric import FlipItMap, FlipItEnv
 from algorithms.generic_policy import CombinedPolicy
 from algorithms.coevosg import CoevoSGAttackerAgent, CoevoSGDefenderAgent, StrategyBase
-from algorithms.generator import AgentGenerator
 from config import EnvConfig, CoevoSGConfig
 from utils import train_stage_coevosg
 
@@ -37,16 +36,12 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     env_config_ = EnvConfig.from_dict(config)
     coevosg_config = CoevoSGConfig.from_dict(config)
 
-    flipit_map = FlipItMap.load(env_config_.path_to_map, device)
-    env = FlipItEnv(flipit_map, env_config_.num_steps, device)
+    env_map, env = env_config_.create(device)
 
-    num_nodes = flipit_map.num_nodes
     ctx = torch.multiprocessing.get_context('spawn')
 
     with ctx.Pool(processes=cpu_cores) as pool:
         defender_agent = CoevoSGDefenderAgent(
-            num_nodes=num_nodes,
-            player_type=0,
             device=device,
             run_name=run_name,
             config=coevosg_config,
@@ -54,8 +49,6 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
             pool=pool,
         )
         attacker_agent = CoevoSGAttackerAgent(
-            num_nodes=num_nodes,
-            player_type=1,
             device=device,
             run_name=run_name,
             config=coevosg_config,

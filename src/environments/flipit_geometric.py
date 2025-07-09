@@ -1,4 +1,6 @@
 import uuid
+from typing import TYPE_CHECKING
+
 from torch_geometric.data import Data
 import torch
 from torchrl.data import (
@@ -9,6 +11,9 @@ from torchrl.data import (
 from tensordict.base import TensorDictBase
 from tensordict import TensorDict
 from torchrl.envs import EnvBase
+
+if TYPE_CHECKING:
+    from config import EnvConfig
 
 
 class FlipItMap(Data):
@@ -21,16 +26,19 @@ class FlipItMap(Data):
     PERCENTAGE_ENTRY_NODES = 0.2
     MIN_ENTRY_NODES = 2
 
-    def __init__(self, num_nodes: int, seed: int | None, device: torch.device) -> None:
-        if seed is not None:
-            generator = torch.Generator().manual_seed(seed)
+    def __init__(self, config: "EnvConfig", device: torch.device | str | None = None) -> None:
+        if device is None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        if config.seed is not None:
+            generator = torch.Generator().manual_seed(config.seed)
         else:
             generator = torch.Generator()
 
-        edge_index, entry_nodes = self._generate_graph(num_nodes, generator, device)
+        edge_index, entry_nodes = self._generate_graph(config.num_nodes, generator, device)
 
-        node_rewards = torch.rand(num_nodes, generator=generator, dtype=torch.float32, device=device)
-        node_costs = -torch.rand(num_nodes, generator=generator, dtype=torch.float32, device=device)
+        node_rewards = torch.rand(config.num_nodes, generator=generator, dtype=torch.float32).to(device)
+        node_costs = -torch.rand(config.num_nodes, generator=generator, dtype=torch.float32).to(device)
 
         super().__init__(
             x=torch.stack([node_rewards, node_costs], dim=1),
@@ -133,13 +141,13 @@ class FlipItMap(Data):
         # Mark certain percentage of nodes as entry points
         num_entry = max(self.MIN_ENTRY_NODES, int(num_nodes * self.PERCENTAGE_ENTRY_NODES))
         entry_nodes = torch.zeros(num_nodes, dtype=torch.bool, device=device)
-        entry_nodes[torch.randperm(num_nodes, generator=generator, device=device)[:num_entry]] = True
+        entry_nodes[torch.randperm(num_nodes, generator=generator).to(device)[:num_entry]] = True
 
         return edge_index, entry_nodes
 
 
 class FlipItEnv(EnvBase):
-    def __init__(self, flip_it_map: FlipItMap, num_steps: int, device: torch.device | str | None = None, batch_size: torch.Size | None = None) -> None:
+    def __init__(self, config: "EnvConfig", flip_it_map: FlipItMap, device: torch.device | str | None = None, batch_size: torch.Size | None = None) -> None:
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -147,16 +155,16 @@ class FlipItEnv(EnvBase):
             batch_size = torch.Size([])
 
         self.map = flip_it_map.to(device)
-        self.num_steps = num_steps
+        self.num_steps = config.num_steps
 
         super().__init__(device=device, batch_size=batch_size)
         self._make_spec()
+        assert isinstance(self.action_spec, Bounded), "Action shape should be of type Bounded."
 
         self.node_owners = torch.zeros((*self.batch_size, self.map.num_nodes), dtype=torch.bool, device=self.device)
         self.step_count = torch.zeros((*self.batch_size, 1), dtype=torch.int32, device=self.device)
         # Initialize game_id tensor placeholder; actual UUIDs will be set in _reset
         self.game_id = torch.empty((*self.batch_size, 16), dtype=torch.uint8, device=self.device)
-
 
     def _make_spec(self) -> None:
         self.state_spec = Composite(
@@ -269,6 +277,12 @@ class FlipItEnv(EnvBase):
             shape=self.batch_size,
             device=self.device,
         )
+
+    @property
+    def action_size(self) -> int:
+        action_size = self.action_spec.high.unique()
+        assert action_size.numel() == 1, f"Action spec high should be a single value, got {action_size}."
+        return action_size.item() + 1  # +1 because high is exclusive
 
     def _set_seed(self, seed: int | None) -> None:
         """
@@ -441,4 +455,3 @@ class FlipItEnv(EnvBase):
             "truncated": is_truncated,
             "terminated": is_terminated,
         }, batch_size=self.batch_size, device=self.device)
-

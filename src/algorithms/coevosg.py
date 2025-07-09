@@ -12,11 +12,11 @@ from tensordict.nn.probabilistic import (
     InteractionType as ExplorationType,
     interaction_type as get_interaction_type,
 )
+from torchrl.data import Bounded
 
 from .base import BaseAgent
 from .generic_policy import CombinedPolicy
 from config import CoevoSGConfig, Player
-
 from environments.flipit_utils import generate_random_pure_strategy
 from environments.flipit_geometric import FlipItEnv
 
@@ -98,21 +98,21 @@ class StrategyBase(nn.Module, ABC):
 
     @classmethod
     @abstractmethod
-    def from_simple_data(cls, data: dict | list, num_nodes: int) -> "StrategyBase":
+    def from_simple_data(cls, data: dict | list, action_size: int) -> "StrategyBase":
         """Recreates a strategy instance from simple data."""
         pass
 
 
 class PureStrategy(StrategyBase):
-    def __init__(self, num_nodes: int, pure_strategy: torch.Tensor) -> None:
+    def __init__(self, action_size: int, pure_strategy: torch.Tensor) -> None:
         super().__init__()
-        self.num_nodes = num_nodes
+        self.action_size = action_size
         self.pure_strategy = pure_strategy
         self.fitness = -float("inf")
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
         action = self.pure_strategy[tensordict["step_count"].item()]
-        logits = torch.zeros(self.num_nodes*2, dtype=torch.float32, device=tensordict.device)
+        logits = torch.zeros(self.action_size, dtype=torch.float32, device=tensordict.device)
         logits[action] = 1.0
         sample_log_prob = torch.zeros(torch.Size(()), dtype=torch.float32, device=tensordict.device)
         embedding = torch.zeros(32, dtype=torch.float32, device=tensordict.device)
@@ -130,7 +130,7 @@ class PureStrategy(StrategyBase):
 
     def mutate(self) -> None:
         mutation_point = torch.randint(0, len(self.pure_strategy), torch.Size(())).item()
-        self.pure_strategy[mutation_point:] = torch.randint(0, self.num_nodes, torch.Size((len(self.pure_strategy) - mutation_point,)), dtype=torch.int32)
+        self.pure_strategy[mutation_point:] = torch.randint(0, self.action_size, torch.Size((len(self.pure_strategy) - mutation_point,)), dtype=torch.int32)
 
     def crossover(self, other: "StrategyBase") -> tuple["StrategyBase", "StrategyBase"]:
         if not isinstance(other, PureStrategy):
@@ -144,17 +144,17 @@ class PureStrategy(StrategyBase):
             raise ValueError("Strategy lengths differ")
 
         if len(strat1) < 2:
-            return PureStrategy(self.num_nodes, strat1.clone()), PureStrategy(self.num_nodes, strat2.clone())
+            return PureStrategy(self.action_size, strat1.clone()), PureStrategy(self.action_size, strat2.clone())
 
         # Simple one-point crossover
         crossover_point = torch.randint(0, len(self.pure_strategy), torch.Size(())).item()
         child1_strategy = torch.cat((self.pure_strategy[:crossover_point], other.pure_strategy[crossover_point:]))
         child2_strategy = torch.cat((other.pure_strategy[:crossover_point], self.pure_strategy[crossover_point:]))
 
-        return PureStrategy(self.num_nodes, child1_strategy), PureStrategy(self.num_nodes, child2_strategy)
+        return PureStrategy(self.action_size, child1_strategy), PureStrategy(self.action_size, child2_strategy)
 
     def copy(self) -> "PureStrategy":
-        return PureStrategy(self.num_nodes, self.pure_strategy.clone())
+        return PureStrategy(self.action_size, self.pure_strategy.clone())
 
     def simplify(self, min_prob_threshold: float = 1e-4, max_pure_strategies: int = 50) -> None:
         """ Pure strategies do not need simplification. """
@@ -210,19 +210,19 @@ class PureStrategy(StrategyBase):
         }
 
     @classmethod
-    def from_simple_data(cls, data: dict, num_nodes: int) -> "PureStrategy":
-        strategy = cls(num_nodes, torch.tensor(data["strategy"], dtype=torch.int32))
+    def from_simple_data(cls, data: dict, action_size: int) -> "PureStrategy":
+        strategy = cls(action_size, torch.tensor(data["strategy"], dtype=torch.int32))
         strategy.fitness = data["fitness"]
         return strategy
 
 
 class MixedStrategy(StrategyBase):
-    def __init__(self, num_nodes: int, pure_strategies: list[PureStrategy], probabilities: list[float]) -> None:
+    def __init__(self, action_size: int, pure_strategies: list[PureStrategy], probabilities: list[float]) -> None:
         super().__init__()
-        self.num_nodes = num_nodes
+        self.action_size = action_size
         self.pure_strategies = pure_strategies
         self.probabilities = probabilities
-        self.pure_strategy_generator = StrategyGenerator(num_nodes, PureStrategy)
+        self.pure_strategy_generator = StrategyGenerator(action_size, PureStrategy)
 
         if len(pure_strategies) != len(probabilities):
             raise ValueError("Number of pure strategies must match number of probabilities.")
@@ -301,15 +301,15 @@ class MixedStrategy(StrategyBase):
         child2_pure = [ps.copy() for ps in other.pure_strategies] + [ps.copy() for ps in self.pure_strategies]
         child2_probs = [p / 2.0 for p in other.probabilities] + [p / 2.0 for p in self.probabilities]
 
-        child1 = MixedStrategy(self.num_nodes, child1_pure, child1_probs)
-        child2 = MixedStrategy(self.num_nodes, child2_pure, child2_probs)
+        child1 = MixedStrategy(self.action_size, child1_pure, child1_probs)
+        child2 = MixedStrategy(self.action_size, child2_pure, child2_probs)
 
         return child1, child2
 
     def copy(self) -> "MixedStrategy":
         copied_pure_strategies = [pure.copy() for pure in self.pure_strategies]
         copied_probabilities = copy.deepcopy(self.probabilities)
-        strategy = MixedStrategy(self.num_nodes, copied_pure_strategies, copied_probabilities)
+        strategy = MixedStrategy(self.action_size, copied_pure_strategies, copied_probabilities)
         strategy.fitness = self.fitness
         return strategy
 
@@ -339,7 +339,7 @@ class MixedStrategy(StrategyBase):
             # Keep the single highest probability one if possible
             if strategy_map:
                 best_strat_tuple, best_prob = max(strategy_map.items(), key=lambda item: item[1])
-                self.pure_strategies = [PureStrategy(self.num_nodes, torch.tensor(list(best_strat_tuple), dtype=torch.int32))]
+                self.pure_strategies = [PureStrategy(self.action_size, torch.tensor(list(best_strat_tuple), dtype=torch.int32))]
                 self.probabilities = [1.0]
             else:  # Should not happen if simplification is called correctly
                 self.pure_strategies = []
@@ -352,11 +352,11 @@ class MixedStrategy(StrategyBase):
             # Sort by probability and keep the top ones
             indices = torch.argsort(torch.tensor(filtered_probabilities), descending=True).tolist()[:max_pure_strategies]
             self.pure_strategies = [
-                PureStrategy(self.num_nodes, torch.tensor(list(filtered_strategies_tuples[i]), dtype=torch.int32)) for
+                PureStrategy(self.action_size, torch.tensor(list(filtered_strategies_tuples[i]), dtype=torch.int32)) for
                 i in indices]
             self.probabilities = [filtered_probabilities[i] for i in indices]
         else:
-            self.pure_strategies = [PureStrategy(self.num_nodes, torch.tensor(list(s_tuple), dtype=torch.int32)) for
+            self.pure_strategies = [PureStrategy(self.action_size, torch.tensor(list(s_tuple), dtype=torch.int32)) for
                                     s_tuple in filtered_strategies_tuples]
             self.probabilities = filtered_probabilities
 
@@ -412,7 +412,7 @@ class MixedStrategy(StrategyBase):
         pure_strategies = data["pure_strategies"]
         self.pure_strategies = []
         for strategy in pure_strategies:
-            self.pure_strategies.append(PureStrategy(self.num_nodes, strategy))
+            self.pure_strategies.append(PureStrategy(self.action_size, strategy))
         self.probabilities = data["probabilities"].tolist()
         self.fitness = data["fitness"]
 
@@ -425,42 +425,42 @@ class MixedStrategy(StrategyBase):
         }
 
     @classmethod
-    def from_simple_data(cls, data: dict, num_nodes: int) -> "MixedStrategy":
+    def from_simple_data(cls, data: dict, action_size: int) -> "MixedStrategy":
         pure_strategies = [
-            PureStrategy.from_simple_data(ps_data, num_nodes)
+            PureStrategy.from_simple_data(ps_data, action_size)
             for ps_data in data["strategies"]
         ]
-        strategy = cls(num_nodes, pure_strategies, data["probabilities"])
+        strategy = cls(action_size, pure_strategies, data["probabilities"])
         strategy.fitness = data["fitness"]
         return strategy
 
 
 class StrategyGenerator:
-    def __init__(self, num_nodes: int, strategy_class: type[StrategyBase]) -> None:
-        self.num_nodes = num_nodes
+    def __init__(self, action_size: int, strategy_class: type[StrategyBase]) -> None:
+        self.action_size = action_size
         self.strategy_class = strategy_class
 
     def __call__(self, **kwargs) -> StrategyBase:
-        return self.strategy_class(self.num_nodes, **kwargs)
+        return self.strategy_class(self.action_size, **kwargs)
 
 
-def strategy_from_simple_data(data: dict, num_nodes: int) -> StrategyBase:
+def strategy_from_simple_data(data: dict, action_size: int) -> StrategyBase:
     if data["type"] == "pure":
-        return PureStrategy.from_simple_data(data, num_nodes)
+        return PureStrategy.from_simple_data(data, action_size)
     elif data["type"] == "mixed":
-        return MixedStrategy.from_simple_data(data, num_nodes)
+        return MixedStrategy.from_simple_data(data, action_size)
     else:
         raise ValueError(f"Unknown strategy type: {data['type']}")
 
 
 # Worker function for multiprocessing (must be defined at the top level or be a static method)
-def _worker_evaluate_strategy(simple_strategy_to_eval, num_nodes, env_map, env_num_steps, simple_opponent_population,
+def _worker_evaluate_strategy(simple_strategy_to_eval, action_size, env_map, env_num_steps, simple_opponent_population,
                               top_n_val):
     # 1. Reconstruct all strategy objects from simple data
-    strategy_to_eval = strategy_from_simple_data(simple_strategy_to_eval, num_nodes)
+    strategy_to_eval = strategy_from_simple_data(simple_strategy_to_eval, action_size)
 
     opponent_population = [
-        strategy_from_simple_data(s_data, num_nodes)
+        strategy_from_simple_data(s_data, action_size)
         for s_data in simple_opponent_population
     ]
 
@@ -477,7 +477,6 @@ def _worker_evaluate_strategy(simple_strategy_to_eval, num_nodes, env_map, env_n
 class CoevoSGAgentBase(BaseAgent, ABC):
     def __init__(
         self,
-        num_nodes: int,
         player_type: int,
         device: torch.device | str,
         run_name: str,
@@ -487,8 +486,10 @@ class CoevoSGAgentBase(BaseAgent, ABC):
         agent_id: int | None = None,
         pool: multiprocessing.pool.Pool | None = None,
     ) -> None:
-        super().__init__(num_nodes, player_type, device, run_name, agent_id)
+        super().__init__(player_type, device, run_name, agent_id)
 
+        assert isinstance(env.action_spec, Bounded), "Action spec should be of type Bounded."
+        self.action_size = env.action_size
         self.config = config
         self.pop_size = pop_size
         self.env = env
@@ -562,7 +563,7 @@ class CoevoSGAgentBase(BaseAgent, ABC):
             # 2. Create the partial function with the simple data
             worker_with_context = partial(
                 _worker_evaluate_strategy,
-                num_nodes=self.num_nodes,
+                action_size=self.action_size,
                 env_map=self.env.map,
                 env_num_steps=self.env.num_steps,
                 simple_opponent_population=simple_opponent_population,
@@ -635,6 +636,9 @@ class CoevoSGAgentBase(BaseAgent, ABC):
 
 
 class CoevoSGDefenderAgent(CoevoSGAgentBase):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs, player_type=0)
+
     def initialize_population(self) -> None:
         """
         Initialize the population with random pure strategies.
@@ -643,17 +647,20 @@ class CoevoSGDefenderAgent(CoevoSGAgentBase):
         self.population = []
         for _ in range(self.pop_size):
             pure_strategy = generate_random_pure_strategy(Player(self.player_type), self.env)
-            self.population.append(MixedStrategy(self.num_nodes, [PureStrategy(self.num_nodes, pure_strategy)], [1.0]))
+            self.population.append(MixedStrategy(self.action_size, [PureStrategy(self.action_size, pure_strategy)], [1.0]))
 
     def load(self, path: str) -> None:
         """
         Load the best strategy from disk.
         """
-        self.population = [MixedStrategy(self.num_nodes, [PureStrategy(self.num_nodes, torch.tensor([]))], [1.0])]
+        self.population = [MixedStrategy(self.action_size, [PureStrategy(self.action_size, torch.tensor([]))], [1.0])]
         self.best_population.load(path)
 
 
 class CoevoSGAttackerAgent(CoevoSGAgentBase):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs, player_type=1)
+
     def initialize_population(self) -> None:
         """
         Initialize the population with random pure strategies.
@@ -662,11 +669,11 @@ class CoevoSGAttackerAgent(CoevoSGAgentBase):
         self.population = []
         for _ in range(self.pop_size):
             pure_strategy = generate_random_pure_strategy(Player(self.player_type), self.env)
-            self.population.append(PureStrategy(self.num_nodes, pure_strategy))
+            self.population.append(PureStrategy(self.action_size, pure_strategy))
 
     def load(self, path: str) -> None:
         """
         Load the best strategy from disk.
         """
-        self.population = [PureStrategy(self.num_nodes, torch.tensor([]))]
+        self.population = [PureStrategy(self.action_size, torch.tensor([]))]
         self.best_population.load(path)

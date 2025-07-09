@@ -12,14 +12,12 @@ from config import Player
 class BaseAgent(nn.Module, ABC):
     def __init__(
         self,
-        num_nodes: int,
         player_type: int,
         device: torch.device | str,
         run_name: str,
         agent_id: int | None = None,
     ) -> None:
         super().__init__()
-        self.num_nodes = num_nodes
         self.player_type = player_type
         self._device = device
         self.player_name = Player(player_type).name

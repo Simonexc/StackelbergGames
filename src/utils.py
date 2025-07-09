@@ -4,9 +4,9 @@ from tensordict.nn.probabilistic import InteractionType as ExplorationType
 import torch
 from tqdm import tqdm
 from torch import nn
-from torchrl.collectors import MultiaSyncDataCollector
-from torchrl.data.replay_buffers import ReplayBuffer
-from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
+from torchrl.collectors import MultiaSyncDataCollector, SyncDataCollector
+from torchrl.data.replay_buffers import ReplayBuffer, TensorDictReplayBuffer
+from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement, PrioritizedSampler
 from torchrl.data.replay_buffers.storages import LazyTensorStorage
 from torchrl.envs import EnvBase
 
@@ -15,9 +15,10 @@ from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy, BaseAgen
 
 
 def create_replay_buffer(config: TrainingConfig) -> ReplayBuffer:
-    return ReplayBuffer(
+    return TensorDictReplayBuffer(
         storage=LazyTensorStorage(max_size=config.steps_per_batch),
-        sampler=SamplerWithoutReplacement(),
+        sampler=PrioritizedSampler(max_capacity=config.steps_per_batch, alpha=0.7, beta=0.5),#SamplerWithoutReplacement(),
+        priority_key="priority",
         transform=lambda data: data.reshape(-1).cpu(),
     )
 
@@ -31,7 +32,7 @@ def create_collector(
 ) -> MultiaSyncDataCollector:
     return MultiaSyncDataCollector(
         [lambda: env for _ in range(num_environments)],
-        policy,
+        policy=policy,
         frames_per_batch=config.steps_per_batch,
         total_frames=config.total_steps_per_turn,
         split_trajs=False,
@@ -77,6 +78,10 @@ def train_agent(
         # Eval
         combined_policy.evaluate(env, 100, player)
         combined_policy.single_run(env, player)
+        # if i >= 20:
+        #     combined_policy.exploration_coeff *= 0.3
+        # if combined_policy.exploration_coeff < 0.01:
+        #     combined_policy.exploration_coeff = 0.0
 
         # schedulers[currently_training].step()
     collector.shutdown()

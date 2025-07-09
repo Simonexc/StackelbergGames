@@ -1,0 +1,82 @@
+name: single_attacker_poacher
+method: bayes
+metric:
+  goal: maximize
+  name: eval/reward_attacker_mean
+parameters:
+  player_turns_attacker:
+    value: 1
+  total_steps_per_turn_attacker:
+    value: 400000
+  epochs_per_batch_attacker:
+    distribution: q_uniform
+    min: 2
+    max: 20
+  steps_per_batch_attacker:
+    distribution: q_log_uniform_values
+    min: 1024
+    max: 8192
+  sub_batch_size_attacker:
+    distribution: q_log_uniform_values
+    min: 64
+    max: 1024
+
+  learning_rate_attacker:
+    distribution: log_uniform_values
+    min: 0.000001
+    max: 0.1
+  max_grad_norm_attacker:
+    distribution: uniform
+    min: 0.0
+    max: 1.0
+
+  clip_epsilon_attacker:
+    distribution: uniform
+    min: 0.0
+    max: 0.5
+  gamma_attacker:
+    value: 0.99
+  lmbda_attacker:
+    distribution: uniform
+    min: 0.8
+    max: 0.9999
+  entropy_eps_attacker:
+    distribution: uniform
+    min: 0.0
+    max: 0.5
+  critic_coef_attacker:
+    distribution: uniform
+    min: 0.0
+    max: 1.0
+
+  use_transformer_backbone:
+    value: false
+  embedding_size:
+    distribution: q_log_uniform_values
+    min: 8
+    max: 256
+  hidden_size_backbone:
+    distribution: q_log_uniform_values
+    min: 8
+    max: 128
+  hidden_size_head:
+    distribution: q_log_uniform_values
+    min: 8
+    max: 256
+  keys_backbone:
+    value:
+      - StepCountExtractor
+      - LastActionExtractor
+      - PositionLastExtractor
+      - TrackValueLastExtractor
+      - AvailableMovesLastExtractor
+      - NodeRewardInfoLastExtractor
+
+  num_nodes:
+    value: 20
+  num_steps:
+    value: 40
+  seed:
+    value: 41
+  env_name:
+    value: poachers

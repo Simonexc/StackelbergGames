@@ -1,6 +1,7 @@
 import argparse
 import multiprocessing
 import yaml
+from functools import partial
 from datetime import datetime
 
 import torch
@@ -8,9 +9,9 @@ from tqdm import tqdm
 import wandb
 from dotenv import dotenv_values
 
-from environments.flipit_geometric import FlipItMap, FlipItEnv
 from algorithms.simple_nn import TrainableNNAgentPolicy, NNAgentPolicy
-from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy
+from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy, ExplorerAgent
+from algorithms.keys_processors import CombinedExtractor
 from algorithms.generator import AgentGenerator
 from config import TrainingConfig, LossConfig, EnvConfig, Player, AgentNNConfig, BackboneConfig, HeadConfig
 from utils import train_agent
@@ -18,12 +19,92 @@ from utils import train_agent
 
 env_config = dotenv_values("../.env")
 
-EMBEDDING_SIZE = 32
-
 """
 https://www.ijcai.org/proceedings/2024/0880.pdf
 https://arxiv.org/pdf/2306.01324
 """
+
+
+def model_factory(env, backbone_config, env_config, training_config, agent_config, head_config, loss_config, run_name, player, device):
+    defender_extractor = CombinedExtractor(player_type=0, env=env, actions=backbone_config.extractors)
+    attacker_extractor = CombinedExtractor(player_type=1, env=env, actions=backbone_config.extractors)
+
+    if player == 0:
+        defender_agent = TrainableNNAgentPolicy(
+            player_type=0,
+            max_sequence_size=env_config.num_steps + 1,
+            extractor=defender_extractor,
+            action_size=env.action_size,
+            env_type=env_config.env_pair,
+            device=device,
+            loss_config=loss_config,
+            training_config=training_config,
+            run_name=run_name,
+            agent_config=agent_config,
+            backbone_config=backbone_config,
+            head_config=head_config,
+        )
+        attacker_agent = MultiAgentPolicy(
+            action_size=env.action_size,
+            player_type=1,
+            device=device,
+            policy_generator=AgentGenerator(
+                NNAgentPolicy,
+                {}
+            ),
+            run_name=run_name,
+        )
+    else:
+        defender_agent = NNAgentPolicy(
+            player_type=0,
+            max_sequence_size=env_config.num_steps + 1,
+            extractor=defender_extractor,
+            action_size=env.action_size,
+            backbone_config=backbone_config,
+            head_config=head_config,
+            agent_config=agent_config,
+            device=device,
+            run_name=run_name,
+        )
+        attacker_agent = TrainableNNAgentPolicy(
+            player_type=1,
+            max_sequence_size=env_config.num_steps + 1,
+            extractor=attacker_extractor,
+            action_size=env.action_size,
+            env_type=env_config.env_pair,
+            device=device,
+            loss_config=loss_config,
+            training_config=training_config,
+            run_name=run_name,
+            backbone_config=backbone_config,
+            head_config=head_config,
+            agent_config=agent_config,
+            #scheduler_steps=training_config.total_steps_per_turn // training_config.steps_per_batch + 5,
+        )
+
+    exploration_defender = ExplorerAgent(
+        action_size=env.action_size,
+        player_type=0,
+        device=device,
+        run_name=run_name,
+        total_steps=env.num_steps,
+        embedding_size=agent_config.embedding_size,
+    )
+    exploration_attacker = ExplorerAgent(
+        action_size=env.action_size,
+        player_type=1,
+        device=device,
+        run_name=run_name,
+        total_steps=env.num_steps,
+        embedding_size=agent_config.embedding_size,
+    )
+    return CombinedPolicy(
+        defender_agent,
+        attacker_agent,
+        #exploration_defender=exploration_defender,
+        #exploration_attacker=exploration_attacker,
+    )
+
 def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: str | None = None, config=None):
     player_name = Player(player).name
     if not run_name:
@@ -44,63 +125,10 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
     backbone_config = BackboneConfig.from_dict(config, suffix=f"_backbone")
     head_config = HeadConfig.from_dict(config, suffix=f"_head")
 
-    flipit_map = FlipItMap.load(env_config_.path_to_map, device)
-    env = FlipItEnv(flipit_map, env_config_.num_steps, device)
+    env_map, env = env_config_.create(device)
 
-    num_nodes = flipit_map.num_nodes
-
-    if player == 0:
-        defender_agent = TrainableNNAgentPolicy(
-            num_nodes=num_nodes,
-            total_steps=env.num_steps,
-            player_type=0,
-            device=device,
-            loss_config=loss_config,
-            training_config=training_config,
-            run_name=run_name,
-            agent_config=agent_config,
-            backbone_config=backbone_config,
-            head_config=head_config,
-        )
-        attacker_agent = MultiAgentPolicy(
-            num_nodes=num_nodes,
-            player_type=1,
-            device=device,
-            policy_generator=AgentGenerator(
-                NNAgentPolicy,
-                {}
-            ),
-            run_name=run_name,
-        )
-    else:
-        defender_agent = NNAgentPolicy(
-            num_nodes=num_nodes,
-            total_steps=env.num_steps,
-            player_type=0,
-            backbone_config=backbone_config,
-            head_config=head_config,
-            agent_config=agent_config,
-            device=device,
-            run_name=run_name,
-        )
-        attacker_agent = TrainableNNAgentPolicy(
-            num_nodes=num_nodes,
-            total_steps=env.num_steps,
-            player_type=1,
-            device=device,
-            loss_config=loss_config,
-            training_config=training_config,
-            run_name=run_name,
-            backbone_config=backbone_config,
-            head_config=head_config,
-            agent_config=agent_config,
-            #scheduler_steps=training_config.total_steps_per_turn // training_config.steps_per_batch + 5,
-        )
-
-    combined_policy = CombinedPolicy(
-        defender_agent,
-        attacker_agent,
-    )
+    factory = partial(model_factory, env, backbone_config, env_config_, training_config, agent_config, head_config, loss_config, run_name, player, device)
+    combined_policy = factory()
 
     pbar = tqdm(total=training_config.total_steps_per_turn * training_config.player_turns)
     train_agent(

@@ -12,7 +12,6 @@ from train_coevosg import training_loop as training_loop_coevosg
 
 from algorithms.generic_policy import RandomAgent, GreedyOracleAgent
 from config import EnvConfig
-from environments.flipit_geometric import FlipItMap, FlipItEnv
 from utils import compare_agent_pairs
 
 
@@ -37,14 +36,13 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     defender_fnn, attacker_fnn = training_loop_nn(device, cpu_cores, run_name+"fnn", config_fnn)
 
     # Train attacker agent using CoevoSG policy
-    defender_coevosg, attacker_coevosg = training_loop_coevosg("cpu", cpu_cores, run_name+"coevosg", config_fnn)
+    #defender_coevosg, attacker_coevosg = training_loop_coevosg("cpu", cpu_cores, run_name+"coevosg", config_fnn)
 
     env_config = EnvConfig.from_dict(config)
-    flipit_map = FlipItMap.load(env_config.path_to_map, "cpu")
-    env = FlipItEnv(flipit_map, env_config.num_steps, "cpu")
+    env_map, env = env_config.create(device)
 
-    random_agent = RandomAgent(num_nodes=flipit_map.num_nodes, player_type=1, device="cpu", run_name="test")
-    greedy_oracle_agent = GreedyOracleAgent(num_nodes=flipit_map.num_nodes, total_steps=env.num_steps, player_type=1, device="cpu", run_name="test", env_map=flipit_map)
+    random_agent = RandomAgent(action_size=env.action_size, embedding_size=32, player_type=1, device="cpu", run_name="test")
+    greedy_oracle_agent = GreedyOracleAgent(action_size=env.action_size, embedding_size=32, total_steps=env.num_steps, player_type=1, device="cpu", run_name="test", env_map=env_map)
     defender_trans = defender_trans.to("cpu")
     attacker_trans = attacker_trans.to("cpu")
     defender_fnn = defender_fnn.to("cpu")
@@ -54,7 +52,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
         [
             (defender_trans, attacker_trans, "transformer"),
             (defender_fnn, attacker_fnn, "fnn"),
-            (defender_coevosg, attacker_coevosg, "coevosg"),
+            #(defender_coevosg, attacker_coevosg, "coevosg"),
         ],
         [
             (random_agent, "random"),

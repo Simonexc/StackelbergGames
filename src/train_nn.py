@@ -8,10 +8,10 @@ from tqdm import tqdm
 import wandb
 from dotenv import dotenv_values
 
-from environments.flipit_geometric import FlipItMap, FlipItEnv
 from algorithms.simple_nn import TrainableNNAgentPolicy
 from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy
 from algorithms.generator import AgentGenerator
+from algorithms.keys_processors import CombinedExtractor
 from config import TrainingConfig, LossConfig, EnvConfig, AgentNNConfig, BackboneConfig, HeadConfig
 from utils import train_stage
 
@@ -44,15 +44,15 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
 
     assert training_config_attacker.player_turns == training_config_defender.player_turns
 
-    flipit_map = FlipItMap.load(env_config_.path_to_map, device)
-    env = FlipItEnv(flipit_map, env_config_.num_steps, device)
+    env_map, env = env_config_.create(device)
 
-    num_nodes = flipit_map.num_nodes
-
+    defender_extractor = CombinedExtractor(player_type=0, env=env, actions=backbone_config.extractors)
     defender_agent = TrainableNNAgentPolicy(
-        num_nodes=num_nodes,
-        total_steps=env.num_steps,
         player_type=0,
+        max_sequence_size=env_config_.num_steps + 1,
+        extractor=defender_extractor,
+        action_size=env.action_size,
+        env_type=env_config_.env_pair,
         device=device,
         loss_config=loss_config_defender,
         training_config=training_config_defender,
@@ -62,8 +62,9 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
         run_name=run_name,
         add_logs=log_wandb,  # Defender logs during training
     )
+    attacker_extractor = CombinedExtractor(player_type=1, env=env, actions=backbone_config.extractors)
     attacker_agent = MultiAgentPolicy(
-        num_nodes=num_nodes,
+        action_size=env.action_size,
         player_type=1,
         device=device,
         run_name=run_name,
@@ -71,8 +72,10 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
         policy_generator=AgentGenerator(
             TrainableNNAgentPolicy,
             {
-                "num_nodes": num_nodes,
-                "total_steps": env.num_steps,
+                "extractor": attacker_extractor,
+                "max_sequence_size": env_config_.num_steps + 1,
+                "action_size": env.action_size,
+                "env_type": env_config_.env_pair,
                 "player_type": 1,
                 "device": device,
                 "loss_config": loss_config_attacker,
