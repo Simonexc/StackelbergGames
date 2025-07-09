@@ -105,11 +105,11 @@ def train_stage(
         train_agent(
             combined_policy,
             env,
-            player,
-            training_config,
-            device,
-            num_envs,
-            pbar,
+            player=player,
+            training_config=training_config,
+            device=device,
+            num_envs=num_envs,
+            pbar=pbar,
         )
 
 

@@ -238,7 +238,7 @@ class PoachersEnv(EnvBase):
             torch.nn.functional.one_hot(self.position[0], num_classes=self.map.num_nodes).float().unsqueeze(-1),
             track_value[0].float().unsqueeze(-1) / self.num_steps,
         ], dim=-1)
-
+        #print(self.position, self.map.num_nodes)
         attacker = torch.cat([
             #node_features[:, 0].unsqueeze(-1) / 10,
             #node_features[:, 1].unsqueeze(-1),
@@ -451,6 +451,7 @@ class PoachersEnv(EnvBase):
             is_terminated[0] |= (self.position == -1).any()  # Check if any position is invalid
             rewards[move_mask] += self.map.move_cost  # * self.map.distances_to_nearest_reward[new_positions] / self.map.max_distance
             rewards[self.position == -1] += self.INVALID_MOVE_PENALTY  # Apply penalty for invalid moves
+            self.position[self.position == -1] = 0  # Reset invalid positions to 0 (or any valid node)
 
         # Check if capture
         if self.position[0].item() == self.position[1].item():

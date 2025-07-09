@@ -334,22 +334,22 @@ class NNAgentPolicy(BaseAgent):
                 dropout=backbone_config.dropout,
             )
         else:
-            backbone = GNNBackbone(
-                extractor=extractor,
-                embedding_size=agent_config.embedding_size,
-                hidden_size=backbone_config.hidden_size,
-            ).to(self._device)
+            # backbone = GNNBackbone(
+            #     extractor=extractor,
+            #     embedding_size=agent_config.embedding_size,
+            #     hidden_size=backbone_config.hidden_size,
+            # ).to(self._device)
             #backbone.load_state_dict(torch.load("test.pth", map_location=self._device))
             # freeze weights
             #for param in backbone.parameters():
             #    param.requires_grad = False
 
-            # backbone = Backbone(
-            #     extractor=extractor,
-            #     embedding_size=agent_config.embedding_size,
-            #     device=self._device,
-            #     hidden_size=backbone_config.hidden_size,
-            # )
+            backbone = Backbone(
+                extractor=extractor,
+                embedding_size=agent_config.embedding_size,
+                device=self._device,
+                hidden_size=backbone_config.hidden_size,
+            )
 
         actor_head = ActorHead(
             embedding_size=agent_config.embedding_size,
@@ -443,9 +443,9 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
     def _training_step(self, tensordict: TensorDictBase) -> dict:
         loss_vals = self.loss(tensordict.to(self._device))
         loss_value = (
-            loss_vals["loss_objective"]**2
-            + loss_vals["loss_critic"]**2
-            + loss_vals["loss_entropy"]**2
+            loss_vals["loss_objective"]  # **2
+            + loss_vals["loss_critic"]  # **2
+            + loss_vals["loss_entropy"]  # **2
         )
 
         self.optimizer.zero_grad()
