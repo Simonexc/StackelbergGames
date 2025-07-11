@@ -80,7 +80,10 @@ parameters:
         - AvailableMovesIntSeqExtractor
       graph_edge_index:
         - GraphEdgeIndexExtractor
-
+  cls_name_backbone:
+    value: BackboneTransformer
+  embedding_cls_name_backbone:
+    value: GNNBackbone
   num_nodes:
     value: 20
   num_steps:
