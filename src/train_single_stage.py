@@ -26,8 +26,8 @@ https://arxiv.org/pdf/2306.01324
 
 
 def model_factory(env, backbone_config, env_config, training_config, agent_config, head_config, loss_config, run_name, player, device):
-    defender_extractor = CombinedExtractor(player_type=0, env=env, actions=backbone_config.extractors)
-    attacker_extractor = CombinedExtractor(player_type=1, env=env, actions=backbone_config.extractors)
+    defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=backbone_config.extractors)
+    attacker_extractor = CombinedExtractor(player_type=1, env=env, actions_map=backbone_config.extractors)
 
     if player == 0:
         defender_agent = TrainableNNAgentPolicy(
@@ -82,23 +82,8 @@ def model_factory(env, backbone_config, env_config, training_config, agent_confi
             #scheduler_steps=training_config.total_steps_per_turn // training_config.steps_per_batch + 5,
         )
 
-    exploration_defender = ExplorerAgent(
-        action_size=env.action_size,
-        player_type=0,
-        device=device,
-        run_name=run_name,
-        total_steps=env.num_steps,
-        embedding_size=agent_config.embedding_size,
-    )
-    exploration_attacker = ExplorerAgent(
-        action_size=env.action_size,
-        player_type=1,
-        device=device,
-        run_name=run_name,
-        total_steps=env.num_steps,
-        embedding_size=agent_config.embedding_size,
-    )
     return CombinedPolicy(
+        device,
         defender_agent,
         attacker_agent,
         #exploration_defender=exploration_defender,
@@ -124,6 +109,8 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
     agent_config = AgentNNConfig.from_dict(config)
     backbone_config = BackboneConfig.from_dict(config, suffix=f"_backbone")
     head_config = HeadConfig.from_dict(config, suffix=f"_head")
+    if agent_config.embedding_size % backbone_config.num_head != 0 and backbone_config.cls_name == "BackboneTransformer":
+        agent_config.embedding_size += backbone_config.num_head - (agent_config.embedding_size % backbone_config.num_head)
 
     env_map, env = env_config_.create(device)
 

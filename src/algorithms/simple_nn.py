@@ -1,3 +1,8 @@
+import inspect
+import gc
+import sys
+from abc import ABC, abstractmethod
+from typing import Iterable
 from unittest.mock import patch
 import torch
 import numpy as np
@@ -19,31 +24,50 @@ from .keys_processors import CombinedExtractor, GraphXExtractor, PositionIntLast
 from environments.config import EnvMapper
 
 
-class Backbone(nn.Module):
-    def __init__(self, extractor: CombinedExtractor, embedding_size: int, device: torch.device | str, hidden_size: int) -> None:
+class BackboneBase(nn.Module, ABC):
+    def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int,
+                 max_sequence_size: int) -> None:
         super().__init__()
 
         self.extractor = extractor
         self.embedding_size = embedding_size
-        self.device = device
-
-        self.feature_extractor = nn.Sequential(
-            nn.Linear(extractor.input_size, hidden_size, device=device),
-            nn.ReLU(),
-            nn.Linear(hidden_size, embedding_size, device=device),
-            nn.ReLU(),
-        )
+        self.max_sequence_size = max_sequence_size
+        self.config = config
 
     def to_module(self) -> TensorDictModule:
         return TensorDictModule(
             self, in_keys=self.extractor.in_keys, out_keys=["embedding"]
         )
 
+    @abstractmethod
+    def forward(self, *args: list[torch.Tensor]) -> torch.Tensor:
+        """
+        Forward method that processes the current step or list of steps.
+        """
+
+
+class Backbone(BackboneBase):
+    def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int, max_sequence_size: int) -> None:
+        super().__init__(
+            config=config,
+            extractor=extractor,
+            embedding_size=embedding_size,
+            max_sequence_size=max_sequence_size,
+        )
+        assert "x" in self.extractor.input_size and len(self.extractor.input_size) == 1, "Backbone expects a single input size for 'x'."
+
+        self.feature_extractor = nn.Sequential(
+            nn.Linear(self.extractor.input_size["x"], self.config.hidden_size),
+            nn.ReLU(),
+            nn.Linear(self.config.hidden_size, self.embedding_size),
+            nn.ReLU(),
+        )
+
     def forward(self, *args: list[torch.Tensor]) -> torch.Tensor:
         """
         Forward method that processes the current step and observed node owners to produce an embedding.
         """
-        x = self.extractor.process(*args)
+        x = self.extractor.process(*args)["x"]
         out = self.feature_extractor(x)
 
         return out
@@ -65,174 +89,183 @@ class _Linear(nn.Linear):
         )
 
 
-class GNNBackbone(nn.Module):
-    def __init__(
-        self,
-        extractor: CombinedExtractor,
-        embedding_size: int,
-        hidden_size: int,
-    ) -> None:
-        super().__init__()
+class GNNBackbone(BackboneBase):
+    def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int,
+                 max_sequence_size: int) -> None:
+        super().__init__(
+            config=config,
+            extractor=extractor,
+            embedding_size=embedding_size,
+            max_sequence_size=max_sequence_size,
+        )
+        assert "graph_x" in self.extractor.input_size, "Backbone expects 'graph_x' in input size."
+        assert "graph_edge_index" in self.extractor.input_size, "Backbone expects 'graph_edge_index' in input keys."
+        assert "position" in self.extractor.input_size, "Backbone expects 'position' in input keys."
+        assert "available_moves" in self.extractor.input_size, "Backbone expects 'available_moves' in input keys."
+        assert "x" in self.extractor.input_size, "Backbone expects 'x' in input keys."
 
-        self.graph_x_extractor = GraphXExtractor(extractor._player_type, extractor._env)
-        self.position_extractor = PositionIntLastExtractor(extractor._player_type, extractor._env)
-        self.available_moves_extractor = AvailableMovesIntExtractor(extractor._player_type, extractor._env)
-        self.last_action_extractor = LastActionExtractor(extractor._player_type, extractor._env)
-        self.step_count_extractor = StepCountExtractor(extractor._player_type, extractor._env)
         with patch("torch_geometric.nn.conv.gcn_conv.Linear", side_effect=_Linear):
             from torch_geometric.nn.conv import GCNConv
             self.graph_conv = nn.ModuleList([
-                GCNConv(5, hidden_size),
-                GCNConv(hidden_size, hidden_size),
+                GCNConv(self.extractor.input_size["graph_x"], self.config.hidden_size),
+                GCNConv(self.config.hidden_size, self.config.hidden_size),
             ])
+
         self.output_projection = nn.Sequential(
             nn.Linear(
-                hidden_size*5
-                + self.last_action_extractor.expected_size
-                + self.step_count_extractor.expected_size,
-                embedding_size,
+                self.config.hidden_size * 5 + self.extractor.input_size["x"],
+                self.embedding_size,
             ),
             nn.ReLU(),
-            nn.Linear(embedding_size, embedding_size),
+            nn.Linear(self.embedding_size, self.embedding_size),
         )
 
-    def to_module(self) -> TensorDictModule:
-        return TensorDictModule(
-            self, in_keys=[self.graph_x_extractor.KEY, "graph_edge_index", self.position_extractor.KEY, self.available_moves_extractor.KEY, self.last_action_extractor.KEY, self.step_count_extractor.KEY], out_keys=["embedding"]
-        )
-
-    def forward(self, graph_x: torch.Tensor, graph_edges: torch.Tensor, position_seq: torch.Tensor, available_moves: torch.Tensor, actions: torch.Tensor, steps: torch.Tensor) -> torch.Tensor:
-        x = self.graph_x_extractor.process(graph_x).clone()
-        position = self.position_extractor.process(position_seq).clone()
-        graph_edges = graph_edges.clone()
-        available_moves = self.available_moves_extractor.process(available_moves)
-        last_action = self.last_action_extractor.process(actions)
-        steps = self.step_count_extractor.process(steps.clone())
+    def forward(self, *args: list[torch.Tensor]) -> torch.Tensor:
+        processed = self.extractor.process(*args)
+        graph_x = processed["graph_x"]
+        graph_edges = processed["graph_edge_index"]
+        position = processed["position"]
+        available_moves = processed["available_moves"]
+        x = processed["x"]
 
         batch_size: int | None = None
-        if x.ndim == 3:
-            batch_size = x.shape[0]
-            addition = torch.arange(batch_size, device=x.device) * x.shape[1]
-            x = x.reshape(-1, *x.shape[2:])
+        org_batches: Iterable[int] | None = None
+        if graph_x.ndim >= 3:
+            org_batches = graph_x.shape[:-2]
+            graph_x = graph_x.flatten(0, -3)  # Flatten all but the last two dimensions
+            position = position.flatten(0, -2)  # Flatten all but the last dimension
+            available_moves = available_moves.flatten(0, -2)  # Flatten all but the last dimension
+
+            batch_size = graph_x.shape[0]
+            addition = torch.arange(batch_size, device=graph_x.device) * graph_x.shape[1]
+            graph_x = graph_x.flatten(0, 1)
+            if graph_edges.ndim == 3:
+                graph_edges = graph_edges[0].repeat(batch_size, 1, 1)
+            else:
+                graph_edges = graph_edges.repeat(batch_size, 1, 1)
             graph_edges += addition.reshape(-1, 1, 1)  # Adjust edges for batch size
             graph_edges = graph_edges.transpose(1, 0).reshape(2, -1)
-            position += addition
-            all_positions = torch.cat([available_moves + addition.reshape(-1, 1), position.unsqueeze(1)], dim=1)
+            all_positions = torch.cat([
+                available_moves + addition.reshape(-1, 1),
+                position + addition.reshape(-1, 1),
+            ], dim=1)
         else:
-            assert x.ndim == 2, "Input tensor must be 2D or 3D"
-            all_positions = torch.cat([available_moves, position.unsqueeze(0)], dim=0)
+            assert graph_x.ndim == 2, "Input tensor must be 2D or 3D"
+            all_positions = torch.cat([available_moves, position], dim=0)
 
         for conv_layer in self.graph_conv:
-            x = conv_layer(x, graph_edges)
-            x = torch.relu(x)
+            graph_x = conv_layer(graph_x, graph_edges)
+            graph_x = torch.relu(graph_x)
 
-        current_x = x[all_positions]
+        current_x = graph_x[all_positions]
         if batch_size is not None:
-            current_x = current_x.reshape(batch_size, -1)
+            current_x = current_x.reshape(*org_batches, -1)
         else:
             current_x = current_x.reshape(-1)
 
+
         current_x = torch.cat([
             current_x,
-            last_action,
-            steps,
+            x,
         ], dim=-1)
 
         projected = self.output_projection(current_x)
-        if batch_size is not None:
-            projected = projected.reshape(batch_size, -1)
 
         return projected
 
 
-class ObservationEmbedding(nn.Module):
-    def __init__(self, input_size: int, embedding_size: int, device: torch.device | str) -> None:
-        super().__init__()
+class ObservationEmbedding(BackboneBase):
+    def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int,
+                 max_sequence_size: int) -> None:
+        super().__init__(
+            config=config,
+            extractor=extractor,
+            embedding_size=embedding_size,
+            max_sequence_size=max_sequence_size,
+        )
+        assert "x" in extractor.input_size, "ObservationEmbedding expects 'x' in input size."
 
-        self.linear_projection = nn.Linear(input_size, embedding_size, device=device)
+        self.linear_projection = nn.Linear(self.extractor.input_size["x"], self.embedding_size)
         self.activation = nn.ReLU()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, *args: list[torch.Tensor]) -> torch.Tensor:
         """
         Forward method to produce an embedding based on observations.
         """
-        return self.activation(self.linear_projection(x))
+        x = self.extractor.process(*args)["x"]
+        expanded = False
+        if x.ndim == 2:
+            expanded = True
+            x = x.unsqueeze(0)
+        x = self.activation(self.linear_projection(x))
+        if expanded:
+            x = x.squeeze(0)
+        return x
 
 
-class BackboneTransformer(nn.Module):
-    def __init__(
-        self,
-        extractor: CombinedExtractor,
-        max_sequence_size: int,
-        embedding_size: int,
-        player_type: int,
-        device: torch.device | str,
-        d_model: int,
-        num_head: int,
-        num_layers: int,
-        dropout: float,
-    ) -> None:
-        super().__init__()
+class BackboneTransformer(BackboneBase):
+    def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int,
+                 max_sequence_size: int) -> None:
+        super().__init__(
+            config=config,
+            extractor=extractor,
+            embedding_size=embedding_size,
+            max_sequence_size=max_sequence_size,
+        )
+        assert self.config.embedding_cls_name is not None, "Embedding class name must be provided in BackboneConfig."
 
-        self.extractor = extractor
-        self.player_type = player_type
-        self.embedding_size = embedding_size
-        self.device = device
-        self.max_sequence_size = max_sequence_size
-
-        self.d_model = d_model
-
-        self.obs_embedding = ObservationEmbedding(
-            input_size=self.extractor.input_size,
+        self.obs_embedding = self._get_obs_embedding_class(self.config.embedding_cls_name)(
+            extractor=self.extractor,
+            config=self.config,
             embedding_size=self.embedding_size,
-            device=device,
+            max_sequence_size=self.max_sequence_size,
         )
         # Learned Positional Encodings (as per DTQN)
-        self.positional_encoder = nn.Embedding(self.max_sequence_size, self.embedding_size, device=self.device)
+        self.positional_encoder = nn.Embedding(self.max_sequence_size, self.embedding_size)
 
         transformer_layer = nn.TransformerEncoderLayer(
             d_model=self.embedding_size,
-            nhead=num_head,
-            dim_feedforward=d_model,
-            dropout=dropout,
+            nhead=self.config.num_head,
+            dim_feedforward=self.config.d_model,
+            dropout=self.config.dropout,
             activation="relu",
             batch_first=True,
             norm_first=False,
-            device=device,
         )
         self.transformer_encoder = nn.TransformerEncoder(
             encoder_layer=transformer_layer,
-            num_layers=num_layers,
+            num_layers=self.config.num_layers,
             norm=None,  # No final LayerNorm after all N blocks; each block has its own
         )
 
-    def _generate_causal_mask(self, size: int) -> torch.Tensor:
-        """Generates a square causal mask for self-attention."""
-        mask = torch.triu(torch.full((size, size), float('-inf'), device=self.device), diagonal=1)
-        return mask
+    @staticmethod
+    def _get_obs_embedding_class(embedding_name: str) -> type[nn.Module]:
+        for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
+            if name == embedding_name:
+                return cls
+        raise ValueError(f"Embedding class '{embedding_name}' not found in {__name__}.")
 
-    def to_module(self) -> TensorDictModule:
-        return TensorDictModule(
-            self, in_keys=self.extractor.in_keys, out_keys=["embedding"]
-        )
+    @staticmethod
+    def _generate_causal_mask(size: int) -> torch.Tensor:
+        """Generates a square causal mask for self-attention."""
+        mask = torch.triu(torch.full((size, size), float('-inf')), diagonal=1)
+        return mask
 
     def forward(self, *args: list[torch.Tensor]) -> torch.Tensor:
         """
         Forward method that processes the current step and observed node owners to produce an embedding.
         """
-        x = self.extractor.process(*args)
-
+        embedded_obs = self.obs_embedding(*args)
         expanded = False
-        if x.ndim == 2:
+        if embedded_obs.ndim == 2:
             expanded = True
-            x = x.unsqueeze(0)
-        embedded_obs = self.obs_embedding(x)
-        positions_idx = torch.arange(0, self.max_sequence_size, dtype=torch.long, device=self.device)
+            embedded_obs = embedded_obs.unsqueeze(0)
+        positions_idx = torch.arange(0, self.max_sequence_size, dtype=torch.long, device=embedded_obs.device)
         positions_idx = positions_idx.unsqueeze(0).expand(embedded_obs.size(0), -1)  # Expand to batch size
 
         x = embedded_obs + self.positional_encoder(positions_idx)
 
-        causal_mask = self._generate_causal_mask(self.max_sequence_size)
+        causal_mask = self._generate_causal_mask(self.max_sequence_size).to(x.device)
 
         output_sequence = self.transformer_encoder(x, mask=causal_mask)
         output_sequence = output_sequence[..., -1, :]  # Take the last step's embedding
@@ -243,13 +276,13 @@ class BackboneTransformer(nn.Module):
 
 
 class ActorHead(nn.Module):
-    def __init__(self, embedding_size: int, player_type: int, device: torch.device | str, action_spec: Bounded, hidden_size: int) -> None:
+    def __init__(self, embedding_size: int, player_type: int, action_spec: Bounded, hidden_size: int) -> None:
         super().__init__()
 
         self.actor_head = nn.Sequential(
-            nn.Linear(embedding_size, hidden_size, device=device),
+            nn.Linear(embedding_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, action_spec.high+1, device=device),
+            nn.Linear(hidden_size, action_spec.high+1),
         )
         self.do_sample = True
         self.action_spec = action_spec
@@ -273,14 +306,13 @@ class ActorHead(nn.Module):
 
 
 class ValueHead(nn.Module):
-    def __init__(self, embedding_size: int, device: torch.device | str, hidden_size: int) -> None:
+    def __init__(self, embedding_size: int, hidden_size: int) -> None:
         super().__init__()
 
-        self.device = device
         self.value_head = nn.Sequential(
-            nn.Linear(embedding_size, hidden_size, device=device),
+            nn.Linear(embedding_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, 1, device=device),
+            nn.Linear(hidden_size, 1),
         )
 
     def to_module(self) -> ValueOperator:
@@ -321,48 +353,23 @@ class NNAgentPolicy(BaseAgent):
             dtype=torch.int32,
         )
 
-        if backbone_config.use_transformer:
-            backbone = BackboneTransformer(
-                extractor=extractor,
-                max_sequence_size=max_sequence_size,
-                embedding_size=agent_config.embedding_size,
-                player_type=player_type,
-                device=self._device,
-                d_model=backbone_config.d_model,
-                num_head=backbone_config.num_head,
-                num_layers=backbone_config.num_layers,
-                dropout=backbone_config.dropout,
-            )
-        else:
-            # backbone = GNNBackbone(
-            #     extractor=extractor,
-            #     embedding_size=agent_config.embedding_size,
-            #     hidden_size=backbone_config.hidden_size,
-            # ).to(self._device)
-            #backbone.load_state_dict(torch.load("test.pth", map_location=self._device))
-            # freeze weights
-            #for param in backbone.parameters():
-            #    param.requires_grad = False
-
-            backbone = Backbone(
-                extractor=extractor,
-                embedding_size=agent_config.embedding_size,
-                device=self._device,
-                hidden_size=backbone_config.hidden_size,
-            )
+        backbone = self._get_backbone_class(backbone_config.cls_name)(
+            config=backbone_config,
+            extractor=extractor,
+            embedding_size=agent_config.embedding_size,
+            max_sequence_size=max_sequence_size,
+        ).to(self._device)
 
         actor_head = ActorHead(
             embedding_size=agent_config.embedding_size,
             player_type=player_type,
-            device=self._device,
             action_spec=action_spec,
             hidden_size=head_config.hidden_size,
-        )
+        ).to(self._device)
         value_head = ValueHead(
             embedding_size=agent_config.embedding_size,
-            device=self._device,
             hidden_size=head_config.hidden_size,
-        )
+        ).to(self._device)
 
         self.agent = ActorValueOperator(
             backbone.to_module(),
@@ -370,8 +377,17 @@ class NNAgentPolicy(BaseAgent):
             value_head.to_module(),
         )
 
+    @staticmethod
+    def _get_backbone_class(cls_name: str) -> type[BackboneBase]:
+        for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass):
+            if name == cls_name:
+                assert issubclass(cls, BackboneBase), f"Class '{cls_name}' is not a subclass of BackboneBase."
+                return cls
+        raise ValueError(f"Backbone class '{cls_name}' not found in {__name__}.")
+
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
-        return self.agent.get_policy_operator()(tensordict)
+        self.agent = self.agent.to(self._device)
+        return self.agent.get_policy_operator()(tensordict.to(self._device))
 
 
 class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
@@ -457,18 +473,18 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
 
         if self._add_logs:
             wandb.log({
-                f"loss/objective_step_{self.player_name}": loss_vals["loss_objective"].item(),
-                f"loss/critic_step_{self.player_name}": loss_vals["loss_critic"].item(),
-                f"loss/entropy_step_{self.player_name}": loss_vals["loss_entropy"].item(),
-                f"train/entropy_step_{self.player_name}": loss_vals["entropy"].item(),
-                f"train/state_value_step_{self.player_name}": tensordict["state_value"].mean().item(),
-                f"train/advantage_step_{self.player_name}": tensordict["advantage"].mean().item(),
+                f"loss/objective_step_{self.player_name}": loss_vals["loss_objective"].detach().cpu().item(),
+                f"loss/critic_step_{self.player_name}": loss_vals["loss_critic"].detach().cpu().item(),
+                f"loss/entropy_step_{self.player_name}": loss_vals["loss_entropy"].detach().cpu().item(),
+                f"train/entropy_step_{self.player_name}": loss_vals["entropy"].detach().cpu().item(),
+                f"train/state_value_step_{self.player_name}": tensordict["state_value"].detach().cpu().mean().item(),
+                f"train/advantage_step_{self.player_name}": tensordict["advantage"].detach().cpu().mean().item(),
                 f"general/step_{self.player_name}": self.num_steps,
                 f"general/epoch_{self.player_name}": self.num_epochs,
                 f"general/cycle_{self.player_name}": self.num_cycle,
             })
 
-        return loss_vals
+        return loss_vals.detach().cpu()
 
     def _train_epoch(self, replay_buffer: ReplayBuffer, cycle_num: int) -> dict:
         epoch_data = {
@@ -524,6 +540,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
         tensordict_data["next"].update({
             "reward": tensordict_data["next"]["reward"][..., self.player_type].unsqueeze(-1),  # retain dimensionality
         })
+        tensordict_data = tensordict_data.to(self._device)
 
         cycle_data = {
             "loss_objective": [],
@@ -544,6 +561,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
             tensordict_data.set("priority", priorities.squeeze(-1))
             tensordict_data.set("index", torch.arange(tensordict_data.batch_size.numel(), device=self._device))
 
+            replay_buffer.empty()
             replay_buffer.extend(tensordict_data)
             replay_buffer.update_tensordict_priority(tensordict_data)
 
@@ -585,6 +603,10 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
                 log_dict["actions/avg_length"] = tensordict_data["next"]["done"].numel() / tensordict_data["next"]["done"].sum().item()
 
             wandb.log(log_dict)
+
+        del tensordict_data
+        torch.cuda.empty_cache()
+        gc.collect()
 
         self.num_cycle += 1
         if self.scheduler is not None:

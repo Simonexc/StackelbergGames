@@ -57,12 +57,14 @@ class RandomAgent(BaseAgent):
 class CombinedPolicy(nn.Module):
     def __init__(
         self,
+        device: torch.device | str,
         defender_module: nn.Module,
         attacker_module: nn.Module,
         exploration_defender: nn.Module | None = None,
         exploration_attacker: nn.Module | None = None,
     ) -> None:
         super().__init__()
+        self._device = device
         self.defender_module = defender_module
         self.attacker_module = attacker_module
         self.exploration_defender = exploration_defender
@@ -86,15 +88,17 @@ class CombinedPolicy(nn.Module):
         return self.attacker_module
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
-        defender_output = self._defender_module(tensordict.clone())
-        attacker_output = self._attacker_module(tensordict)
+        with torch.no_grad():
+            defender_output = self._defender_module(tensordict.clone().to(self._device))
+            attacker_output = self._attacker_module(tensordict.to(self._device))
 
         attacker_output.update({
-            "action": torch.stack([defender_output["action"], attacker_output["action"]], dim=-1),
-            "logits": torch.stack([defender_output["logits"], attacker_output["logits"]], dim=-1),
-            "sample_log_prob": torch.stack([defender_output["sample_log_prob"], attacker_output["sample_log_prob"]], dim=-1),
-            "embedding": torch.stack([defender_output["embedding"], attacker_output["embedding"]], dim=-1),
+            "action": torch.stack([defender_output["action"].clone(), attacker_output["action"]], dim=-1),
+            "logits": torch.stack([defender_output["logits"].clone(), attacker_output["logits"]], dim=-1),
+            "sample_log_prob": torch.stack([defender_output["sample_log_prob"].clone(), attacker_output["sample_log_prob"]], dim=-1),
+            "embedding": torch.stack([defender_output["embedding"].clone(), attacker_output["embedding"]], dim=-1),
         })
+        del defender_output
         return attacker_output
 
     def evaluate(self, env: EnvBase, rollout_num: int, current_player: int, add_logs: bool = True) -> torch.Tensor:

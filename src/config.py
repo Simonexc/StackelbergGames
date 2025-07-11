@@ -112,13 +112,14 @@ class CoevoSGConfig(FromDictMixin):
 
 @dataclass
 class BackboneConfig(FromDictMixin):
-    use_transformer: bool
-    keys: list[str]
+    cls_name: str
+    keys: dict[str, list[str]]
     d_model: int = 32 * 4
     num_head: int = 8
     num_layers: int = 2
     dropout: float = 0.1
     hidden_size: int = 32
+    embedding_cls_name: str | None = None
 
     def __post_init__(self) -> None:
         available_extractors: dict[str, type[keys_processors.TensorDictKeyExtractorBase]] = {
@@ -126,13 +127,16 @@ class BackboneConfig(FromDictMixin):
             for name, cls in inspect.getmembers(sys.modules[keys_processors.__name__], inspect.isclass)
             if issubclass(cls, keys_processors.TensorDictKeyExtractorBase) and cls is not keys_processors.TensorDictKeyExtractorBase
         }
-        self.extractors: list[type[keys_processors.TensorDictKeyExtractorBase]] = []
+        self.extractors: dict[str, list[type[keys_processors.TensorDictKeyExtractorBase]]] = {}
 
-        for key in self.keys:
-            if key not in available_extractors:
-                raise ValueError(f"Key '{key}' is not a valid extractor. Available keys: {list(available_extractors.keys())}")
+        for key, extractor_names in self.keys.items():
+            curr_extractors: list[type[keys_processors.TensorDictKeyExtractorBase]] = []
+            for extractor_name in extractor_names:
+                if extractor_name not in available_extractors:
+                    raise ValueError(f"Key '{extractor_name}' is not a valid extractor. Available keys: {list(available_extractors.keys())}")
+                curr_extractors.append(available_extractors[extractor_name])
 
-            self.extractors.append(available_extractors[key])
+            self.extractors[key] = curr_extractors
 
 
 @dataclass

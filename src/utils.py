@@ -67,9 +67,10 @@ def train_agent(
         combined_policy.attacker_module.currently_training = True
 
     for i, tensordict_data in enumerate(collector):
+        num_data = tensordict_data.numel()
         reward = trained_agent.train_cycle(tensordict_data, replay_buffer, i)
 
-        pbar.update(tensordict_data.numel())
+        pbar.update(num_data)
         cum_reward_str = (
             f"average reward {'defender' if player == 0 else 'attacker'}={reward: 4.4f}"
         )

@@ -32,7 +32,7 @@ class PoachersMap(Data):
 
     def __init__(self, config: "EnvConfig", device: torch.device | str | None = None) -> None:
         if device is None:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device = torch.device("cpu")# torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if config is None:
             super().__init__()
             return
@@ -176,7 +176,7 @@ class PoachersEnv(EnvBase):
 
     def __init__(self, config: "EnvConfig", poachers_map: PoachersMap, device: torch.device | str | None = None, batch_size: torch.Size | None = None) -> None:
         if device is None:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            device = torch.device("cpu")#torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         if batch_size is None:
             batch_size = torch.Size([])
@@ -209,6 +209,10 @@ class PoachersEnv(EnvBase):
         action_size = self.action_spec.high.unique()
         assert action_size.numel() == 1, f"Action spec high should be a single value, got {action_size}."
         return action_size.item() + 1  # +1 because high is exclusive
+
+    @property
+    def graph_x_size(self) -> int:
+        return self.observation_spec["graph_x"].shape[-1]
 
     def _get_action_mask(self, positions: torch.Tensor) -> torch.Tensor:
         available_moves = self.map.get_neighbors(positions)
@@ -270,12 +274,17 @@ class PoachersEnv(EnvBase):
             shape=self.batch_size,
             device=self.device,
         )
-        node_features_size = 7
+        node_features_size = 5
 
         self.observation_spec = Composite(
             {
                 "graph_x": Unbounded(
                     shape=torch.Size((*self.batch_size, 2, self.map.num_nodes, node_features_size)),
+                    dtype=torch.float32,
+                    device=self.device,
+                ),
+                "graph_x_seq": Unbounded(
+                    shape=torch.Size((*self.batch_size, 2, self.num_steps+1, self.map.num_nodes, node_features_size)),
                     dtype=torch.float32,
                     device=self.device,
                 ),
@@ -413,11 +422,16 @@ class PoachersEnv(EnvBase):
         self.nodes_collected = torch.zeros(self.map.num_nodes, dtype=torch.bool, device=self.device)
         self.nodes_prepared = torch.zeros(self.map.num_nodes, dtype=torch.bool, device=self.device)
 
+        graph_x = self._get_graph_x(track_value[..., -1, :])
+        graph_x_seq = torch.full((*self.batch_size, 2, self.num_steps+1, self.map.num_nodes, graph_x.shape[-1]), -1.0, dtype=torch.float32, device=self.device)
+        graph_x_seq[..., -1, :, :] = graph_x.clone()
+
         return TensorDict({
             "position_seq": position_seq,
             "track_value": track_value,
             "available_moves": available_moves,
-            "graph_x": self._get_graph_x(track_value[..., -1, :]),
+            "graph_x": graph_x,
+            "graph_x_seq": graph_x_seq,
             "graph_edge_index": self.map.edge_index.clone(),
             "node_reward_info": torch.full((*self.batch_size, 2, self.num_steps+1, 2), -1, dtype=torch.int32, device=self.device),  # 2: prepared, collected
             "actions_seq": torch.full((*self.batch_size, 2, self.num_steps+1), -1, dtype=torch.int32, device=self.device),
@@ -435,6 +449,7 @@ class PoachersEnv(EnvBase):
         previous_node_reward_info = tensordict["node_reward_info"][..., 1:, :]
         previous_step_count_seq = tensordict["step_count_seq"][..., 1:]
         previous_actions_seq = tensordict["actions_seq"][..., 1:]
+        previous_graph_x_seq = tensordict["graph_x_seq"][..., 1:, :, :]
         batch_shape = self.batch_size
 
         rewards = torch.zeros((*batch_shape, 2), dtype=torch.float32, device=self.device)
@@ -523,6 +538,8 @@ class PoachersEnv(EnvBase):
         if self.step_count >= self.num_steps:
             is_truncated[0] = True
 
+        graph_x = self._get_graph_x(new_track.squeeze(-2))
+
         return TensorDict({
             "track_value": torch.cat([
                 previous_track_value,
@@ -537,7 +554,11 @@ class PoachersEnv(EnvBase):
                 previous_available_moves,
                 self.map.get_neighbors(self.position).unsqueeze(-2).int(),
             ], dim=-2),
-            "graph_x": self._get_graph_x(new_track.squeeze(-2)),
+            "graph_x": graph_x,
+            "graph_x_seq": torch.cat([
+                previous_graph_x_seq,
+                graph_x.unsqueeze(-3),
+            ], dim=-3),
             "graph_edge_index": self.map.edge_index.clone(),
             "node_reward_info": torch.cat([
                 previous_node_reward_info,

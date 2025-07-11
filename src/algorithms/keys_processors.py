@@ -159,7 +159,29 @@ class PositionIntLastExtractor(TensorDictKeyExtractorBase):
         return 1
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
-        return value[..., self._player_type, -1]
+        return value[..., self._player_type, -1].unsqueeze(-1)
+
+
+class PositionIntSeqExtractor(TensorDictKeyExtractorBase):
+    KEY = "position_seq"
+
+    @property
+    def expected_size(self) -> int:
+        return 1
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        return value[..., self._player_type, :].unsqueeze(-1)
+
+
+class GraphEdgeIndexExtractor(TensorDictKeyExtractorBase):
+    KEY = "graph_edge_index"
+
+    @property
+    def expected_size(self) -> int:
+        return self._env.map.edge_index.shape[1]
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        return value
 
 
 class TrackValueLastExtractor(TensorDictKeyExtractorBase):
@@ -198,8 +220,19 @@ class AvailableMovesIntExtractor(TensorDictKeyExtractorBase):
         return 4
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
+        return value[..., self._player_type, -1, :]
+
+
+class AvailableMovesIntSeqExtractor(TensorDictKeyExtractorBase):
+    KEY = "available_moves"
+
+    @property
+    def expected_size(self) -> int:
+        return 4
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
         # Extract the last available moves
-        available_moves = value[..., self._player_type, -1, :]
+        available_moves = value[..., self._player_type, :, :]
         return available_moves
 
 
@@ -222,34 +255,58 @@ class GraphXExtractor(TensorDictKeyExtractorBase):
 
     @property
     def expected_size(self) -> int:
-        return 5
+        return self._env.graph_x_size
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
         return value[..., self._player_type, :, :]
 
 
+class GraphXSeqExtractor(TensorDictKeyExtractorBase):
+    KEY = "graph_x_seq"
+
+    @property
+    def expected_size(self) -> int:
+        return self._env.graph_x_size
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        return value[..., self._player_type, :, :, :]
+
+
 class CombinedExtractor:
-    def __init__(self, player_type: int, env: FlipItEnv, actions: list[Type[TensorDictKeyExtractorBase]]) -> None:
+    def __init__(self, player_type: int, env: FlipItEnv, actions_map: dict[str, list[Type[TensorDictKeyExtractorBase]]]) -> None:
         self._player_type = player_type
         self._env = env
-        self._actions = [
-            action(player_type, env) for action in actions
-        ]
+        self._actions_map = {
+            key: [action(player_type, env) for action in actions]
+            for key, actions in actions_map.items()
+        }
 
     @property
     def in_keys(self) -> list[str]:
-        return [action.KEY for action in self._actions]
+        keys = []
+        for actions in self._actions_map.values():
+            for action in actions:
+                if action.KEY not in keys:
+                    keys.append(action.KEY)
+        return keys
 
     @property
-    def input_size(self) -> int:
+    def input_size(self) -> dict[str, int]:
         """
-        Calculate the total expected size of the concatenated tensor.
+        Calculate the total expected size of the concatenated tensors.
         """
-        return sum(action.expected_size for action in self._actions)
+        return {
+            key: sum(action.expected_size for action in actions)
+            for key, actions in self._actions_map.items()
+        }
 
-    def process(self, *args: list[torch.Tensor]) -> torch.Tensor:
+    def process(self, *args: list[torch.Tensor]) -> dict[str, torch.Tensor]:
         """
         Process the values extracted from the tensordict and concatenate them.
         """
-        processed_values = [action.process(value) for action, value in zip(self._actions, args)]
-        return torch.cat(processed_values, dim=-1)
+        processed_values: dict[str, torch.Tensor] = {}
+        key_to_args = {key: arg for key, arg in zip(self.in_keys, args)}
+        for key, actions in self._actions_map.items():
+            processed_values[key] = torch.cat([action.process(key_to_args[action.KEY]) for action in actions], dim=-1)
+
+        return processed_values
