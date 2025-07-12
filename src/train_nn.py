@@ -46,7 +46,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
 
     env_map, env = env_config_.create(device)
 
-    defender_extractor = CombinedExtractor(player_type=0, env=env, actions=backbone_config.extractors)
+    defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=backbone_config.extractors)
     defender_agent = TrainableNNAgentPolicy(
         player_type=0,
         max_sequence_size=env_config_.num_steps + 1,
@@ -62,7 +62,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
         run_name=run_name,
         add_logs=log_wandb,  # Defender logs during training
     )
-    attacker_extractor = CombinedExtractor(player_type=1, env=env, actions=backbone_config.extractors)
+    attacker_extractor = CombinedExtractor(player_type=1, env=env, actions_map=backbone_config.extractors)
     attacker_agent = MultiAgentPolicy(
         action_size=env.action_size,
         player_type=1,

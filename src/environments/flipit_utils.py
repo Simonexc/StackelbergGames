@@ -5,6 +5,7 @@ import torch
 import random
 
 from .flipit_geometric import FlipItEnv
+from .poachers import PoachersEnv
 from config import Player
 
 
@@ -122,6 +123,52 @@ class BeliefState:
         self.believed_node_owners[last_belief[1].target_node] = last_belief[0].value
 
 
+class BeliefState2:
+    def __init__(self, player: Player, env: PoachersEnv, device: torch.device) -> None:
+        self.pos = env.position[player.value]
+        self.player = player
+        self.env = env
+        self.device = device
+        self.prepared = env.nodes_prepared.clone()
+        self.collected = env.nodes_collected.clone()
+
+    def update_belief(self, action: int) -> None:
+        if action < 4:
+            self.pos = self.env.map.get_neighbors(torch.tensor([self.pos]))[0, action]
+        elif action == 5 and not self.prepared[self.pos] and not self.collected[self.pos] and self.env.map.reward_nodes[self.pos]:
+            self.prepared[self.pos] = True
+        elif action == 6 and not self.collected[self.pos] and self.prepared[self.pos]:
+            self.collected[self.pos] = True
+
+    def available_actions(self) -> list[int]:
+        """
+        Get a list of available actions for the player.
+
+        Returns:
+            list[int]: A list of available actions.
+        """
+        actions = []
+        neighbors = self.env.map.get_neighbors(torch.tensor([self.pos]))[0]
+        for i, neighbor in enumerate(neighbors):
+            if neighbor != -1:
+                actions.append(i)
+        actions.append(4)
+        if self.player == Player.attacker and self.env.map.reward_nodes[self.pos]:
+            if not self.prepared[self.pos] and not self.collected[self.pos]:
+                actions.append(5)
+            if not self.collected[self.pos]:
+                actions.append(6)
+
+        return actions
+
+    @classmethod
+    def from_observation_actions(cls, player: Player, env: PoachersEnv, actions: list[int], device: str | torch.device) -> "BeliefState2":
+        instance = cls(player, env, device)
+        for action in actions:
+            instance.update_belief(action)
+        return instance
+
+
 def generate_random_pure_strategy(player: Player, env: FlipItEnv) -> torch.Tensor:
     """
     Generate a random pure strategy for the FlipIt game.
@@ -135,10 +182,11 @@ def generate_random_pure_strategy(player: Player, env: FlipItEnv) -> torch.Tenso
     """
 
     pure_strategy: list[int] = []
-    belief_state = BeliefState(player, env, env.device)
+    belief_state = BeliefState2(player, env, env.device)
     for step in range(env.num_steps):
-        target_node = random.choice(belief_state.nodes_reachable())
-        pure_strategy.append(target_node)
-        belief_state.update_belief(PlayerTargetPair(player=player, target_node=target_node))
+        target_action = random.choice(belief_state.available_actions())
+        pure_strategy.append(target_action)
+        #belief_state.update_belief(PlayerTargetPair(player=player, target_node=target_node))
+        belief_state.update_belief(target_action)
 
     return torch.tensor(pure_strategy, dtype=torch.int32)

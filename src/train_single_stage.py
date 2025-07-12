@@ -83,7 +83,6 @@ def model_factory(env, backbone_config, env_config, training_config, agent_confi
         )
 
     return CombinedPolicy(
-        device,
         defender_agent,
         attacker_agent,
         #exploration_defender=exploration_defender,

@@ -185,6 +185,7 @@ class PoachersEnv(EnvBase):
 
         self.map = poachers_map.to(device)
         self.num_steps = config.num_steps
+        self.config = config
 
         super().__init__(device=device, batch_size=batch_size)
         self._make_spec()

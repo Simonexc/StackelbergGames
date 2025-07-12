@@ -57,14 +57,12 @@ class RandomAgent(BaseAgent):
 class CombinedPolicy(nn.Module):
     def __init__(
         self,
-        device: torch.device | str,
         defender_module: nn.Module,
         attacker_module: nn.Module,
         exploration_defender: nn.Module | None = None,
         exploration_attacker: nn.Module | None = None,
     ) -> None:
         super().__init__()
-        self._device = device
         self.defender_module = defender_module
         self.attacker_module = attacker_module
         self.exploration_defender = exploration_defender
@@ -89,8 +87,8 @@ class CombinedPolicy(nn.Module):
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
         with torch.no_grad():
-            defender_output = self._defender_module(tensordict.clone().to(self._device))
-            attacker_output = self._attacker_module(tensordict.to(self._device))
+            defender_output = self._defender_module(tensordict.clone())
+            attacker_output = self._attacker_module(tensordict)
 
         attacker_output.update({
             "action": torch.stack([defender_output["action"].clone(), attacker_output["action"]], dim=-1),

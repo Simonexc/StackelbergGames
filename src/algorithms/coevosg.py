@@ -1,3 +1,4 @@
+import random
 from abc import ABC, abstractmethod
 import copy
 import os
@@ -17,8 +18,9 @@ from torchrl.data import Bounded
 from .base import BaseAgent
 from .generic_policy import CombinedPolicy
 from config import CoevoSGConfig, Player
-from environments.flipit_utils import generate_random_pure_strategy
+from environments.flipit_utils import generate_random_pure_strategy, BeliefState2
 from environments.flipit_geometric import FlipItEnv
+from environments.poachers import PoachersEnv
 
 
 class StrategyBase(nn.Module, ABC):
@@ -104,11 +106,13 @@ class StrategyBase(nn.Module, ABC):
 
 
 class PureStrategy(StrategyBase):
-    def __init__(self, action_size: int, pure_strategy: torch.Tensor) -> None:
+    def __init__(self, action_size: int, pure_strategy: torch.Tensor, env: PoachersEnv, player: Player) -> None:
         super().__init__()
         self.action_size = action_size
         self.pure_strategy = pure_strategy
         self.fitness = -float("inf")
+        self.player = player
+        self.env = env
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
         action = self.pure_strategy[tensordict["step_count"].item()]
@@ -130,7 +134,12 @@ class PureStrategy(StrategyBase):
 
     def mutate(self) -> None:
         mutation_point = torch.randint(0, len(self.pure_strategy), torch.Size(())).item()
-        self.pure_strategy[mutation_point:] = torch.randint(0, self.action_size, torch.Size((len(self.pure_strategy) - mutation_point,)), dtype=torch.int32)
+        belief_state = BeliefState2.from_observation_actions(player=self.player, env=self.env, device=self.pure_strategy.device, actions=self.pure_strategy[:mutation_point].tolist())
+        for step in range(mutation_point, len(self.pure_strategy)):
+            actions = belief_state.available_actions()
+            action = random.choice(actions)
+            belief_state.update_belief(action)
+            self.pure_strategy[step] = action
 
     def crossover(self, other: "StrategyBase") -> tuple["StrategyBase", "StrategyBase"]:
         if not isinstance(other, PureStrategy):
@@ -144,17 +153,17 @@ class PureStrategy(StrategyBase):
             raise ValueError("Strategy lengths differ")
 
         if len(strat1) < 2:
-            return PureStrategy(self.action_size, strat1.clone()), PureStrategy(self.action_size, strat2.clone())
+            return PureStrategy(self.action_size, strat1.clone(), self.env, self.player), PureStrategy(self.action_size, strat2.clone(), self.env, self.player)
 
         # Simple one-point crossover
         crossover_point = torch.randint(0, len(self.pure_strategy), torch.Size(())).item()
         child1_strategy = torch.cat((self.pure_strategy[:crossover_point], other.pure_strategy[crossover_point:]))
         child2_strategy = torch.cat((other.pure_strategy[:crossover_point], self.pure_strategy[crossover_point:]))
 
-        return PureStrategy(self.action_size, child1_strategy), PureStrategy(self.action_size, child2_strategy)
+        return PureStrategy(self.action_size, child1_strategy, self.env, self.player), PureStrategy(self.action_size, child2_strategy, self.env, self.player)
 
     def copy(self) -> "PureStrategy":
-        return PureStrategy(self.action_size, self.pure_strategy.clone())
+        return PureStrategy(self.action_size, self.pure_strategy.clone(), self.env, self.player)
 
     def simplify(self, min_prob_threshold: float = 1e-4, max_pure_strategies: int = 50) -> None:
         """ Pure strategies do not need simplification. """
@@ -210,8 +219,8 @@ class PureStrategy(StrategyBase):
         }
 
     @classmethod
-    def from_simple_data(cls, data: dict, action_size: int) -> "PureStrategy":
-        strategy = cls(action_size, torch.tensor(data["strategy"], dtype=torch.int32))
+    def from_simple_data(cls, data: dict, action_size: int, env: PoachersEnv, player: Player) -> "PureStrategy":
+        strategy = cls(action_size, torch.tensor(data["strategy"], dtype=torch.int32), env, player)
         strategy.fitness = data["fitness"]
         return strategy
 
@@ -222,7 +231,10 @@ class MixedStrategy(StrategyBase):
         self.action_size = action_size
         self.pure_strategies = pure_strategies
         self.probabilities = probabilities
-        self.pure_strategy_generator = StrategyGenerator(action_size, PureStrategy)
+        assert len(pure_strategies) > 0
+        self.env = pure_strategies[0].env
+        self.player = pure_strategies[0].player
+        # self.pure_strategy_generator = StrategyGenerator(action_size, PureStrategy)
 
         if len(pure_strategies) != len(probabilities):
             raise ValueError("Number of pure strategies must match number of probabilities.")
@@ -352,11 +364,11 @@ class MixedStrategy(StrategyBase):
             # Sort by probability and keep the top ones
             indices = torch.argsort(torch.tensor(filtered_probabilities), descending=True).tolist()[:max_pure_strategies]
             self.pure_strategies = [
-                PureStrategy(self.action_size, torch.tensor(list(filtered_strategies_tuples[i]), dtype=torch.int32)) for
+                PureStrategy(self.action_size, torch.tensor(list(filtered_strategies_tuples[i]), dtype=torch.int32), self.env, self.player) for
                 i in indices]
             self.probabilities = [filtered_probabilities[i] for i in indices]
         else:
-            self.pure_strategies = [PureStrategy(self.action_size, torch.tensor(list(s_tuple), dtype=torch.int32)) for
+            self.pure_strategies = [PureStrategy(self.action_size, torch.tensor(list(s_tuple), dtype=torch.int32), self.env, self.player) for
                                     s_tuple in filtered_strategies_tuples]
             self.probabilities = filtered_probabilities
 
@@ -425,9 +437,9 @@ class MixedStrategy(StrategyBase):
         }
 
     @classmethod
-    def from_simple_data(cls, data: dict, action_size: int) -> "MixedStrategy":
+    def from_simple_data(cls, data: dict, action_size: int, env: PoachersEnv, player: Player) -> "MixedStrategy":
         pure_strategies = [
-            PureStrategy.from_simple_data(ps_data, action_size)
+            PureStrategy.from_simple_data(ps_data, action_size, env, player)
             for ps_data in data["strategies"]
         ]
         strategy = cls(action_size, pure_strategies, data["probabilities"])
@@ -444,28 +456,28 @@ class StrategyGenerator:
         return self.strategy_class(self.action_size, **kwargs)
 
 
-def strategy_from_simple_data(data: dict, action_size: int) -> StrategyBase:
+def strategy_from_simple_data(data: dict, action_size: int, env: PoachersEnv, player: Player) -> StrategyBase:
     if data["type"] == "pure":
-        return PureStrategy.from_simple_data(data, action_size)
+        return PureStrategy.from_simple_data(data, action_size, env, player)
     elif data["type"] == "mixed":
-        return MixedStrategy.from_simple_data(data, action_size)
+        return MixedStrategy.from_simple_data(data, action_size, env, player)
     else:
         raise ValueError(f"Unknown strategy type: {data['type']}")
 
 
 # Worker function for multiprocessing (must be defined at the top level or be a static method)
-def _worker_evaluate_strategy(simple_strategy_to_eval, action_size, env_map, env_num_steps, simple_opponent_population,
-                              top_n_val):
+def _worker_evaluate_strategy(simple_strategy_to_eval, action_size, env_map, config, simple_opponent_population,
+                              top_n_val, player, env):
     # 1. Reconstruct all strategy objects from simple data
-    strategy_to_eval = strategy_from_simple_data(simple_strategy_to_eval, action_size)
+    strategy_to_eval = strategy_from_simple_data(simple_strategy_to_eval, action_size, env, player)
 
     opponent_population = [
-        strategy_from_simple_data(s_data, action_size)
+        strategy_from_simple_data(s_data, action_size, env, player.opponent)
         for s_data in simple_opponent_population
     ]
 
     # 2. Reconstruct the environment
-    current_env = FlipItEnv(env_map, env_num_steps)
+    current_env = env.__class__(config, env_map, env.device)
 
     # 3. Perform evaluation
     strategy_to_eval.evaluate(current_env, opponent_population, top_n_val)
@@ -565,7 +577,9 @@ class CoevoSGAgentBase(BaseAgent, ABC):
                 _worker_evaluate_strategy,
                 action_size=self.action_size,
                 env_map=self.env.map,
-                env_num_steps=self.env.num_steps,
+                env=self.env,
+                player=Player(self.player_type),
+                config=self.env.config,
                 simple_opponent_population=simple_opponent_population,
                 top_n_val=self.config.attacker_eval_top_n
             )
@@ -647,13 +661,13 @@ class CoevoSGDefenderAgent(CoevoSGAgentBase):
         self.population = []
         for _ in range(self.pop_size):
             pure_strategy = generate_random_pure_strategy(Player(self.player_type), self.env)
-            self.population.append(MixedStrategy(self.action_size, [PureStrategy(self.action_size, pure_strategy)], [1.0]))
+            self.population.append(MixedStrategy(self.action_size, [PureStrategy(self.action_size, pure_strategy, self.env, Player(self.player_type))], [1.0]))
 
     def load(self, path: str) -> None:
         """
         Load the best strategy from disk.
         """
-        self.population = [MixedStrategy(self.action_size, [PureStrategy(self.action_size, torch.tensor([]))], [1.0])]
+        self.population = [MixedStrategy(self.action_size, [PureStrategy(self.action_size, torch.tensor([]), self.env, Player(self.player_type))], [1.0])]
         self.best_population.load(path)
 
 
@@ -669,11 +683,11 @@ class CoevoSGAttackerAgent(CoevoSGAgentBase):
         self.population = []
         for _ in range(self.pop_size):
             pure_strategy = generate_random_pure_strategy(Player(self.player_type), self.env)
-            self.population.append(PureStrategy(self.action_size, pure_strategy))
+            self.population.append(PureStrategy(self.action_size, pure_strategy, self.env, Player(self.player_type)))
 
     def load(self, path: str) -> None:
         """
         Load the best strategy from disk.
         """
-        self.population = [PureStrategy(self.action_size, torch.tensor([]))]
+        self.population = [PureStrategy(self.action_size, torch.tensor([]), self.env, Player(self.player_type))]
         self.best_population.load(path)
