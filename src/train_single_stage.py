@@ -48,6 +48,7 @@ def model_factory(env, backbone_config, env_config, training_config, agent_confi
             action_size=env.action_size,
             player_type=1,
             device=device,
+            embedding_size=agent_config.embedding_size,
             policy_generator=AgentGenerator(
                 NNAgentPolicy,
                 {}

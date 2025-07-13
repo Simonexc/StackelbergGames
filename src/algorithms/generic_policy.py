@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import os
 
 import torch
@@ -14,6 +15,21 @@ from .base import BaseAgent, BaseTrainableAgent
 from .generator import AgentGenerator
 from environments.flipit_utils import BeliefState
 from environments.flipit_geometric import FlipItMap
+from environments.poachers import PoachersMap
+
+
+def _tensordict_update_from_action(action: torch.Tensor, embedding_size: int, action_size: int, device: torch.device | str) -> dict[str, torch.Tensor]:
+    logits = torch.zeros(action_size, dtype=torch.float32, device=device)
+    logits[action] = 1.0
+    sample_log_prob = torch.zeros(torch.Size(()), dtype=torch.float32, device=device)
+    embedding = torch.zeros(embedding_size, dtype=torch.float32, device=device)
+
+    return {
+        "action": action,
+        "logits": logits,
+        "sample_log_prob": sample_log_prob,
+        "embedding": embedding,
+    }
 
 
 class RandomAgent(BaseAgent):
@@ -39,18 +55,11 @@ class RandomAgent(BaseAgent):
         pass
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
-        action = torch.randint(0, self.action_size, torch.Size(()), dtype=torch.int32, device=self._device)
-        logits = torch.zeros(self.action_size, dtype=torch.float32, device=self._device)
-        logits[action] = 1.0
-        sample_log_prob = torch.zeros(torch.Size(()), dtype=torch.float32, device=self._device)
-        embedding = torch.zeros(self.embedding_size, dtype=torch.float32, device=self._device)
+        action_mask = tensordict["actions_mask"][..., self.player_type, :]
+        available_actions = action_mask.nonzero(as_tuple=False).squeeze(-1)
+        action = available_actions[torch.randint(0, len(available_actions), torch.Size(()), dtype=torch.int32).item()]
 
-        tensordict.update({
-            "action": action,
-            "logits": logits,
-            "sample_log_prob": sample_log_prob,
-            "embedding": embedding,
-        })
+        tensordict.update(_tensordict_update_from_action(action, self.embedding_size, self.action_size, self._device))
         return tensordict
 
 
@@ -211,6 +220,108 @@ class MultiAgentPolicy(BaseTrainableAgent):
         return self.policies[-1](tensordict)
 
 
+class MapLogicModuleBase(ABC):
+    def __init__(self, env_map: FlipItMap | PoachersMap, player_type: int, total_steps: int, device: torch.device | str):
+        self._env_map = env_map
+        self._player_type = player_type
+        self._total_steps = total_steps
+        self._device = device
+
+    @abstractmethod
+    def get_action(self, tensordict: TensorDictBase) -> torch.Tensor:
+        """
+        Get the action based on the current state of the environment.
+        """
+
+
+class FlipItLogicModule(MapLogicModuleBase):
+    def get_action(self, tensordict: TensorDictBase) -> torch.Tensor:
+        node_owners = tensordict["node_owners"]
+        current_step = tensordict["step_count"].item()
+        rewards = self._env_map.x[:, 0]
+        costs = self._env_map.x[:, 1]
+
+        # Use BeliefState to update belief from node_owners
+        belief = BeliefState(Player.attacker, type('DummyEnv', (), {'map': self._env_map})(), self._device)
+        belief.believed_node_owners = node_owners.clone()
+        reachable_nodes = belief.nodes_reachable()
+        if not reachable_nodes:
+            # fallback: pick any node
+            reachable_nodes = list(range(self._env_map.num_nodes))
+
+        # For each reachable node, compute reward for flipping (if not owned)
+        best_reward = 0
+        best_action_type = 1  # default to observe
+        best_target_node = reachable_nodes[0]
+        for node in reachable_nodes:
+            if not node_owners[node]:
+                reward = rewards[node].item() * (self._total_steps - current_step) + costs[node].item()
+                if reward > best_reward:
+                    best_reward = reward
+                    best_action_type = 0  # flip
+                    best_target_node = node
+        # If no flip is better than observe (which is always 0), best_action_type stays 1
+        return torch.tensor([best_action_type * len(node_owners) + best_target_node], dtype=torch.int32,
+                              device=self._device)
+
+
+class PoachersLogicModule(MapLogicModuleBase):
+    def _distances_to_nearest_reward(self, nodes_collected: torch.Tensor) -> torch.Tensor:
+        final_distances = torch.full((self._env_map.num_nodes,), float('inf'), dtype=torch.float32,
+                                     device=self._device)
+
+        nodes = torch.where(~nodes_collected & self._env_map.reward_nodes)[0].tolist()
+        distances = [0] * len(nodes)
+        visited: set[int] = set()
+
+        while nodes:
+            current_node = nodes.pop(0)
+            distance = distances.pop(0)
+            if current_node in visited or distance >= final_distances[current_node].item():
+                continue
+            visited.add(current_node)
+            final_distances[current_node] = distance
+
+            neighbors = self._env_map.get_neighbors(
+                torch.tensor([current_node], dtype=torch.int32, device=self._device)
+            ).squeeze(0).cpu().tolist()
+            for neighbor in neighbors:
+                if neighbor != -1 and neighbor not in visited:
+                    distances.append(distance + 1)
+                    nodes.append(neighbor)
+
+        return final_distances
+
+    def get_action(self, tensordict: TensorDictBase) -> torch.Tensor:
+        nodes_collected = tensordict["nodes_collected_fi"]
+        nodes_prepared = tensordict["nodes_prepared_fi"]
+        position = tensordict["position_seq"][self._player_type, -1].item()
+
+        neighbors = self._env_map.get_neighbors(
+            torch.tensor([position], dtype=torch.int32, device=self._device)).squeeze(0)
+        valid_neighbors = neighbors[neighbors != -1]
+        distances = self._distances_to_nearest_reward(nodes_collected)
+        current_distance = distances[position].item()
+        if current_distance == 0:
+            # Already at not used reward node
+            if nodes_prepared[position]:
+                action = torch.tensor([6], dtype=torch.int32, device=self._device)  # Collect
+            else:
+                action = torch.tensor([5], dtype=torch.int32, device=self._device)  # Prepare
+        else:
+            # Go to the nearest not used reward node
+            neighbor_distances = distances[valid_neighbors]
+            min_distance = neighbor_distances.min().item()
+            distance_indexes = (neighbor_distances == min_distance).nonzero(as_tuple=False).squeeze(-1)
+            random_index = distance_indexes[
+                torch.randint(0, len(distance_indexes), torch.Size(()), dtype=torch.int32).item()]
+            neighbor = valid_neighbors[random_index].item()
+            action = (neighbors == neighbor).nonzero(as_tuple=False).squeeze(-1)
+            assert action.numel() == 1, f"Expected single action, got {action.numel()} for neighbor {neighbor}."
+
+        return action
+
+
 class GreedyOracleAgent(BaseAgent):
     def __init__(
         self,
@@ -218,18 +329,16 @@ class GreedyOracleAgent(BaseAgent):
         player_type: int,
         device: torch.device | str,
         run_name: str,
-        env_map: FlipItMap,
+        map_logic: MapLogicModuleBase,
         total_steps: int,
         embedding_size: int,
         agent_id: int | None = None,
     ):
         super().__init__(player_type, device, run_name, agent_id)
-        self._env_map = env_map
+        self._map_logic = map_logic
         self._action_size = action_size
         self._total_steps = total_steps
-        self._rewards = env_map.x[:, 0]
-        self._costs = env_map.x[:, 1]
-        self.embedding_size = embedding_size
+        self._embedding_size = embedding_size
 
     def save(self) -> None:
         pass
@@ -238,40 +347,9 @@ class GreedyOracleAgent(BaseAgent):
         pass
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
-        node_owners = tensordict["node_owners"]
-        current_step = tensordict["step_count"].item()
+        action = self._map_logic.get_action(tensordict)
 
-        # Use BeliefState to update belief from node_owners
-        belief = BeliefState(Player.attacker, type('DummyEnv', (), {'map': self._env_map})(), self._device)
-        belief.believed_node_owners = node_owners.clone()
-        reachable_nodes = belief.nodes_reachable()
-        if not reachable_nodes:
-            # fallback: pick any node
-            reachable_nodes = list(range(self.num_nodes))
-
-        # For each reachable node, compute reward for flipping (if not owned)
-        best_reward = 0
-        best_action_type = 1  # default to observe
-        best_target_node = reachable_nodes[0]
-        for node in reachable_nodes:
-            if not node_owners[node]:
-                reward = self._rewards[node].item() * (self._total_steps - current_step) + self._costs[node].item()
-                if reward > best_reward:
-                    best_reward = reward
-                    best_action_type = 0  # flip
-                    best_target_node = node
-        # If no flip is better than observe (which is always 0), best_action_type stays 1
-        action = torch.tensor(best_action_type * len(node_owners) + best_target_node, dtype=torch.int32, device=self._device)
-        logits = torch.zeros(self._action_size, dtype=torch.float32, device=self._device)
-        logits[action] = 1.0
-        sample_log_prob = torch.zeros(torch.Size(()), dtype=torch.float32, device=self._device)
-        embedding = torch.zeros(self.embedding_size, dtype=torch.float32, device=self._device)
-        tensordict.update({
-            "action": action,
-            "logits": logits,
-            "sample_log_prob": sample_log_prob,
-            "embedding": embedding,
-        })
+        tensordict.update(_tensordict_update_from_action(action, self._embedding_size, self._action_size, self._device))
         return tensordict
 
 

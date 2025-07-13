@@ -351,7 +351,21 @@ class PoachersEnv(EnvBase):
                     shape=torch.Size((*self.batch_size, 2, self.num_steps+1)),
                     dtype=torch.int32,
                     device=self.device,
-                )
+                ),
+                "nodes_prepared_fi": Bounded(  # fi - full information; used in oracle agents
+                    low=0,
+                    high=1,
+                    shape=torch.Size((*self.batch_size, self.map.num_nodes)),
+                    dtype=torch.bool,
+                    device=self.device,
+                ),
+                "nodes_collected_fi": Bounded(  # fi - full information; used in oracle agents
+                    low=0,
+                    high=1,
+                    shape=torch.Size((*self.batch_size, self.map.num_nodes)),
+                    dtype=torch.bool,
+                    device=self.device,
+                ),
             },
             shape=self.batch_size,
             device=self.device,
@@ -440,6 +454,8 @@ class PoachersEnv(EnvBase):
             "step_count": self.step_count.clone(),
             "step_count_seq": step_count_seq,
             "game_id": self.game_id.clone(),
+            "nodes_collected_fi": self.nodes_collected.clone(),
+            "nodes_prepared_fi": self.nodes_prepared.clone(),
         }, batch_size=self.batch_size, device=self.device)
 
     def _step(self, tensordict: TensorDictBase) -> TensorDictBase:
@@ -572,4 +588,6 @@ class PoachersEnv(EnvBase):
             # "done": is_terminated | is_truncated,
             "truncated": is_truncated,
             "terminated": is_terminated,
+            "nodes_collected_fi": self.nodes_collected.clone(),
+            "nodes_prepared_fi": self.nodes_prepared.clone(),
         }, batch_size=self.batch_size, device=self.device)

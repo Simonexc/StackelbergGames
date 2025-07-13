@@ -351,7 +351,7 @@ class MixedStrategy(StrategyBase):
             # Keep the single highest probability one if possible
             if strategy_map:
                 best_strat_tuple, best_prob = max(strategy_map.items(), key=lambda item: item[1])
-                self.pure_strategies = [PureStrategy(self.action_size, torch.tensor(list(best_strat_tuple), dtype=torch.int32))]
+                self.pure_strategies = [PureStrategy(self.action_size, torch.tensor(list(best_strat_tuple), dtype=torch.int32), self.env, self.player)]
                 self.probabilities = [1.0]
             else:  # Should not happen if simplification is called correctly
                 self.pure_strategies = []
@@ -424,7 +424,7 @@ class MixedStrategy(StrategyBase):
         pure_strategies = data["pure_strategies"]
         self.pure_strategies = []
         for strategy in pure_strategies:
-            self.pure_strategies.append(PureStrategy(self.action_size, strategy))
+            self.pure_strategies.append(PureStrategy(self.action_size, strategy, self.env, self.player))
         self.probabilities = data["probabilities"].tolist()
         self.fitness = data["fitness"]
 
