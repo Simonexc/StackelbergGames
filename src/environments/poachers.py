@@ -186,13 +186,14 @@ class PoachersEnv(EnvBase):
         self.map = poachers_map.to(device)
         self.num_steps = config.num_steps
         self.config = config
+        self._generator = torch.Generator(device=device)
 
         super().__init__(device=device, batch_size=batch_size)
         self._make_spec()
         assert isinstance(self.action_spec, Bounded), "Action shape should be of type Bounded."
 
         # Set initial positions to two random entry nodes.
-        self.position = self.map.entry_nodes_list[torch.randperm(self.map.entry_nodes_list.shape[-1], device=self.device)[:2]]
+        self.position = self.map.entry_nodes_list[torch.randperm(self.map.entry_nodes_list.shape[-1], generator=self._generator, device=self.device)[:2]]
         self.nodes_prepared = torch.zeros(self.map.num_nodes, dtype=torch.bool, device=self.device)
         self.nodes_collected = torch.zeros(self.map.num_nodes, dtype=torch.bool, device=self.device)
 
@@ -201,9 +202,7 @@ class PoachersEnv(EnvBase):
         self.game_id = torch.empty((*self.batch_size, 16), dtype=torch.uint8, device=self.device)
 
     def _set_seed(self, seed: int | None) -> None:
-        """
-        We don't need the seed here since all of the operations are deterministic.
-        """
+        self._generator.manual_seed(seed)
 
     @property
     def action_size(self) -> int:
@@ -414,7 +413,7 @@ class PoachersEnv(EnvBase):
         )
 
     def _reset(self, tensordict: TensorDictBase, **kwargs) -> TensorDictBase:
-        self.position = self.map.entry_nodes_list[torch.randperm(self.map.entry_nodes_list.shape[-1], device=self.device)[:2]]
+        self.position = self.map.entry_nodes_list[torch.randperm(self.map.entry_nodes_list.shape[-1], generator=self._generator, device=self.device)[:2]]
         position_seq = torch.full((*self.batch_size, 2, self.num_steps+1), -1, dtype=torch.int64, device=self.device)
         position_seq[..., -1] = self.position.clone()
 

@@ -26,11 +26,12 @@ critic_coef_defender:  0.6
 learning_rate_defender: 0.002
 max_grad_norm_defender: 0.15
 
-use_transformer_backbone: False
+cls_name_backbone: Backbone
 keys_backbone:
-  - StepCountExtractor
-  - ObservedNodeOwnersLastExtractor
-  - LastActionExtractor
+  x:
+    - StepCountExtractor
+    - ObservedNodeOwnersLastExtractor
+    - LastActionExtractor
 
 num_nodes: 40 # 25
 num_steps: 20 # 15

@@ -134,7 +134,7 @@ class BeliefState2:
 
     def update_belief(self, action: int) -> None:
         if action < 4:
-            self.pos = self.env.map.get_neighbors(torch.tensor([self.pos]))[0, action]
+            self.pos = self.env.map.get_neighbors(torch.tensor([self.pos], device=self.env.device))[0, action]
         elif action == 5 and not self.prepared[self.pos] and not self.collected[self.pos] and self.env.map.reward_nodes[self.pos]:
             self.prepared[self.pos] = True
         elif action == 6 and not self.collected[self.pos] and self.prepared[self.pos]:
@@ -148,7 +148,7 @@ class BeliefState2:
             list[int]: A list of available actions.
         """
         actions = []
-        neighbors = self.env.map.get_neighbors(torch.tensor([self.pos]))[0]
+        neighbors = self.env.map.get_neighbors(torch.tensor([self.pos], device=self.env.device))[0]
         for i, neighbor in enumerate(neighbors):
             if neighbor != -1:
                 actions.append(i)
@@ -169,6 +169,28 @@ class BeliefState2:
         return instance
 
 
+# def generate_random_pure_strategy(player: Player, env: FlipItEnv) -> torch.Tensor:
+#     """
+#     Generate a random pure strategy for the FlipIt game.
+#
+#     Args:
+#         num_steps (int): Number of steps in the game.
+#         num_nodes (int): Number of nodes in the game graph.
+#
+#     Returns:
+#         list[ActionTargetPair]: A list of action-target pairs representing the pure strategy.
+#     """
+#
+#     pure_strategy: list[int] = []
+#     belief_state = BeliefState2(player, env, env.device)
+#     for step in range(env.num_steps):
+#         target_action = random.choice(belief_state.available_actions())
+#         pure_strategy.append(target_action)
+#         #belief_state.update_belief(PlayerTargetPair(player=player, target_node=target_node))
+#         belief_state.update_belief(target_action)
+#
+#     return torch.tensor(pure_strategy, dtype=torch.int32)
+
 def generate_random_pure_strategy(player: Player, env: FlipItEnv) -> torch.Tensor:
     """
     Generate a random pure strategy for the FlipIt game.
@@ -182,11 +204,10 @@ def generate_random_pure_strategy(player: Player, env: FlipItEnv) -> torch.Tenso
     """
 
     pure_strategy: list[int] = []
-    belief_state = BeliefState2(player, env, env.device)
+    belief_state = BeliefState(player, env, env.device)
     for step in range(env.num_steps):
-        target_action = random.choice(belief_state.available_actions())
-        pure_strategy.append(target_action)
-        #belief_state.update_belief(PlayerTargetPair(player=player, target_node=target_node))
-        belief_state.update_belief(target_action)
+        target_node = random.choice(belief_state.nodes_reachable())
+        pure_strategy.append(target_node)
+        belief_state.update_belief(PlayerTargetPair(player=player, target_node=target_node))
 
     return torch.tensor(pure_strategy, dtype=torch.int32)

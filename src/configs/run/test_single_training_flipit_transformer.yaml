@@ -26,11 +26,13 @@ critic_coef_defender:  0.6
 learning_rate_defender: 0.0003
 max_grad_norm_defender: 1.5
 
-use_transformer_backbone: True
+cls_name_backbone: BackboneTransformer
+embedding_cls_name_backbone: ObservationEmbedding
 keys_backbone:
-  - StepCountSeqExtractor
-  - ObservedNodeOwnersExtractor
-  - ActionsExtractor
+  x:
+    - StepCountSeqExtractor
+    - ObservedNodeOwnersExtractor
+    - ActionsExtractor
 
 num_nodes: 40 # 25
 num_steps: 20 # 15

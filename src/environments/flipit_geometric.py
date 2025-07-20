@@ -230,7 +230,14 @@ class FlipItEnv(EnvBase):
                     shape=torch.Size((*self.batch_size, 2, self.num_steps+1)),
                     dtype=torch.int32,
                     device=self.device,
-                )
+                ),
+                "actions_mask": Bounded(
+                    low=0,
+                    high=1,
+                    shape=torch.Size((*self.batch_size, 2, self.map.num_nodes * 2)),
+                    dtype=torch.bool,
+                    device=self.device,
+                ),
             },
             shape=self.batch_size,
             device=self.device,
@@ -310,6 +317,7 @@ class FlipItEnv(EnvBase):
             "step_count": self.step_count.clone(),
             "step_count_seq": step_count_seq,
             "game_id": self.game_id.clone(),
+            "actions_mask": torch.ones((*self.batch_size, 2, self.map.num_nodes * 2), dtype=torch.bool, device=self.device),
         }, batch_size=self.batch_size, device=self.device)
 
     def is_reachable_for_defender_batched(self, node_indices: torch.Tensor) -> torch.Tensor:
@@ -454,4 +462,5 @@ class FlipItEnv(EnvBase):
             "done": is_done,
             "truncated": is_truncated,
             "terminated": is_terminated,
+            "actions_mask": torch.ones((*self.batch_size, 2, self.map.num_nodes * 2), dtype=torch.bool, device=self.device),
         }, batch_size=self.batch_size, device=self.device)

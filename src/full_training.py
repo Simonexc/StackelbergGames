@@ -23,11 +23,11 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     Full training loop that trains both the defender and attacker agents.
     """
 
-    with open(os.path.join("configs", "run", "test_single_training_transformer.yaml"), "r") as file:
+    with open(os.path.join("configs", "run", "test_single_training_flipit_transformer.yaml"), "r") as file:
         config_transformer = yaml.safe_load(file)
         config_transformer.update(config)
 
-    with open(os.path.join("configs", "run", "test_single_training.yaml"), "r") as file:
+    with open(os.path.join("configs", "run", "test_single_training_flipit.yaml"), "r") as file:
         config_fnn = yaml.safe_load(file)
         config_fnn.update(config)
 

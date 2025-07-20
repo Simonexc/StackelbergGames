@@ -99,11 +99,18 @@ class CombinedPolicy(nn.Module):
             defender_output = self._defender_module(tensordict.clone())
             attacker_output = self._attacker_module(tensordict)
 
+        defender_embedding = defender_output["embedding"].clone()
+        attacker_embedding = attacker_output["embedding"]
+        if defender_embedding.shape[-1] != attacker_embedding.shape[-1]:
+            if defender_embedding.shape[-1] < attacker_embedding.shape[-1]:
+                defender_embedding = torch.cat([defender_embedding, torch.zeros_like(attacker_embedding[..., defender_embedding.shape[-1]:])], dim=-1)
+            else:
+                attacker_embedding = torch.cat([attacker_embedding, torch.zeros_like(defender_embedding[..., attacker_embedding.shape[-1]:])], dim=-1)
         attacker_output.update({
             "action": torch.stack([defender_output["action"].clone(), attacker_output["action"]], dim=-1),
             "logits": torch.stack([defender_output["logits"].clone(), attacker_output["logits"]], dim=-1),
             "sample_log_prob": torch.stack([defender_output["sample_log_prob"].clone(), attacker_output["sample_log_prob"]], dim=-1),
-            "embedding": torch.stack([defender_output["embedding"].clone(), attacker_output["embedding"]], dim=-1),
+            "embedding": torch.stack([defender_embedding, attacker_embedding], dim=-1),
         })
         del defender_output
         return attacker_output
@@ -261,7 +268,7 @@ class FlipItLogicModule(MapLogicModuleBase):
                     best_action_type = 0  # flip
                     best_target_node = node
         # If no flip is better than observe (which is always 0), best_action_type stays 1
-        return torch.tensor([best_action_type * len(node_owners) + best_target_node], dtype=torch.int32,
+        return torch.tensor(best_action_type * len(node_owners) + best_target_node, dtype=torch.int32,
                               device=self._device)
 
 
@@ -305,9 +312,9 @@ class PoachersLogicModule(MapLogicModuleBase):
         if current_distance == 0:
             # Already at not used reward node
             if nodes_prepared[position]:
-                action = torch.tensor([6], dtype=torch.int32, device=self._device)  # Collect
+                action = torch.tensor(6, dtype=torch.int32, device=self._device)  # Collect
             else:
-                action = torch.tensor([5], dtype=torch.int32, device=self._device)  # Prepare
+                action = torch.tensor(5, dtype=torch.int32, device=self._device)  # Prepare
         else:
             # Go to the nearest not used reward node
             neighbor_distances = distances[valid_neighbors]
@@ -316,8 +323,7 @@ class PoachersLogicModule(MapLogicModuleBase):
             random_index = distance_indexes[
                 torch.randint(0, len(distance_indexes), torch.Size(()), dtype=torch.int32).item()]
             neighbor = valid_neighbors[random_index].item()
-            action = (neighbors == neighbor).nonzero(as_tuple=False).squeeze(-1)
-            assert action.numel() == 1, f"Expected single action, got {action.numel()} for neighbor {neighbor}."
+            action = (neighbors == neighbor).nonzero(as_tuple=False).reshape(torch.Size(()))
 
         return action
 
