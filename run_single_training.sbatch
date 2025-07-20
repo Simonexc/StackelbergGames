@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem-per-cpu=4G
+#SBATCH --mem-per-cpu=1G
 #SBATCH --gres=gpu:a100:1
 #SBATCH --output=slurm_logs/stackelberg_single_training_%j.out
 #SBATCH --error=slurm_logs/stackelberg_single_training_%j.err
