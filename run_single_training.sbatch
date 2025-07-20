@@ -11,6 +11,7 @@
 #SBATCH --time=02:00:00
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=01153165@pw.edu.pl
+#SBATCH --account=mandziuk-lab
 
 date; hostname; pwd
 
