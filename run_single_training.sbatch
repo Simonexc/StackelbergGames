@@ -15,7 +15,12 @@
 
 date; hostname; pwd
 
+export TMPDIR=/raid/strochimiak/tmp/$SLURM_JOB_ID
+mkdir -p $TMPDIR
+
 cd /home2/faculty/strochimiak/StackelbergGames/src
 /home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python train_single_stage.py configs/run/test_single_training_poachers.yaml 1
+
+rm -rf $TMPDIR
 
 date
