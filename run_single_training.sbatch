@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=stackelberg_single_training
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=1G
 #SBATCH --gres=gpu:a100:1
