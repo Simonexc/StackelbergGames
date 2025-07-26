@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import os
+from dotenv import dotenv_values
 
 import torch
 from torch import nn
@@ -7,6 +8,9 @@ from tensordict import TensorDictBase
 from torchrl.data import ReplayBuffer
 
 from config import Player
+
+
+env_config = dotenv_values("../../.env")
 
 
 class BaseAgent(nn.Module, ABC):
@@ -30,7 +34,7 @@ class BaseAgent(nn.Module, ABC):
         self.currently_training = False
 
     def save(self) -> None:
-        run_folder = os.path.join("saved_models", self.run_name, self.player_name)
+        run_folder = os.path.join(env_config.get("MODELS_PATH", "."), "saved_models", self.run_name, self.player_name)
         save_path = os.path.join(run_folder, f"agent_{self.agent_id or 0}.pth")
         os.makedirs(run_folder, exist_ok=True)
         torch.save(self.state_dict(), save_path)

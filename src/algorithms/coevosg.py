@@ -4,6 +4,7 @@ import copy
 import os
 import multiprocessing
 from functools import partial
+from dotenv import dotenv_values
 
 import torch
 from torch import nn
@@ -21,6 +22,9 @@ from config import CoevoSGConfig, Player
 from environments.flipit_utils import generate_random_pure_strategy, BeliefState2
 from environments.flipit_geometric import FlipItEnv
 from environments.poachers import PoachersEnv
+
+
+env_config = dotenv_values("../../.env")
 
 
 class StrategyBase(nn.Module, ABC):
@@ -88,7 +92,7 @@ class StrategyBase(nn.Module, ABC):
         """
         Returns the path name for saving/loading the strategy.
         """
-        run_folder = os.path.join("saved_models", run_name, player_name)
+        run_folder = os.path.join(env_config.get("MODELS_PATH", "."), "saved_models", run_name, player_name)
         save_path = os.path.join(run_folder, "agent_0.pth")
         os.makedirs(run_folder, exist_ok=True)
         return save_path
