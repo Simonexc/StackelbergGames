@@ -3,7 +3,7 @@ networkx
 numpy
 torch
 tqdm
-torchrl
+torchrl==0.8.0
 tensordict
 torch_geometric
 
