@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import torch
 
 from algorithms import keys_processors
-from environments.config import EnvMapper
+from environments.env_mapper import EnvMapper
 
 
 class Player(Enum):

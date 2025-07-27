@@ -103,7 +103,6 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
             combined_policy,
             env,
             training_configs=(training_config_defender, training_config_attacker),
-            device=device,
             num_envs=cpu_cores,
             pbar=pbar,
         )

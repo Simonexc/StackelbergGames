@@ -30,7 +30,7 @@ if __name__ == "__main__":
         else torch.device("cpu")
     )
     print(f"Using device: {device}")
-    cpu_cores = min(multiprocessing.cpu_count(), 12)
+    cpu_cores = min(multiprocessing.cpu_count(), 8)
     print(f"Creating {cpu_cores} processes.")
 
     train = partial(

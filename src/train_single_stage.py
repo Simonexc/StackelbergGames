@@ -112,7 +112,7 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
     if agent_config.embedding_size % backbone_config.num_head != 0 and backbone_config.cls_name == "BackboneTransformer":
         agent_config.embedding_size += backbone_config.num_head - (agent_config.embedding_size % backbone_config.num_head)
 
-    env_map, env = env_config_.create(device)
+    env_map, env = env_config_.create("cpu")
 
     factory = partial(model_factory, env, backbone_config, env_config_, training_config, agent_config, head_config, loss_config, run_name, player, device)
     combined_policy = factory()
@@ -123,7 +123,6 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
         env,
         player=player,
         training_config=training_config,
-        device=device,
         num_envs=cpu_cores,
         pbar=pbar,
     )

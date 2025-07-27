@@ -1,11 +1,12 @@
 import os
 import random
+from typing import TYPE_CHECKING
 
 from tensordict.nn.probabilistic import InteractionType as ExplorationType
 import torch
 from tqdm import tqdm
 from torch import nn
-from torchrl.collectors import MultiaSyncDataCollector, SyncDataCollector
+from torchrl.collectors import MultiSyncDataCollector
 from torchrl.data.replay_buffers import ReplayBuffer, TensorDictReplayBuffer
 from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement, PrioritizedSampler
 from torchrl.data.replay_buffers.storages import LazyTensorStorage
@@ -13,6 +14,9 @@ from torchrl.envs import EnvBase
 
 from config import TrainingConfig
 from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy, BaseAgent, GreedyOracleAgent, RandomAgent
+
+if TYPE_CHECKING:
+    from environments.base_env import EnvironmentBase
 
 
 def create_replay_buffer(config: TrainingConfig) -> ReplayBuffer:
@@ -25,14 +29,14 @@ def create_replay_buffer(config: TrainingConfig) -> ReplayBuffer:
 
 
 def create_collector(
-    env: EnvBase,
+    env: "EnvironmentBase",
     policy: nn.Module,
     config: TrainingConfig,
     device: torch.device | str,
     num_environments: int,
-) -> MultiaSyncDataCollector:
-    return MultiaSyncDataCollector(
-        [lambda: env for _ in range(num_environments)],
+) -> MultiSyncDataCollector:
+    return MultiSyncDataCollector(
+        [env.create_from_self for _ in range(num_environments)],
         policy=policy,
         frames_per_batch=config.steps_per_batch,
         total_frames=config.total_steps_per_turn,
@@ -45,14 +49,13 @@ def create_collector(
 
 def train_agent(
     combined_policy: CombinedPolicy,
-    env: EnvBase,
+    env: "EnvironmentBase",
     player: int,
     training_config: TrainingConfig,
-    device: torch.device | str,
     num_envs: int,
     pbar: tqdm,
 ) -> None:
-    collector = create_collector(env, combined_policy, training_config, device, num_envs)
+    collector = create_collector(env, combined_policy, training_config, env.device, num_envs)
     replay_buffer = create_replay_buffer(training_config)
 
     trained_agent = combined_policy.attacker_module if player == 1 else combined_policy.defender_module
@@ -78,7 +81,7 @@ def train_agent(
         pbar.set_description(cum_reward_str)
 
         # Eval
-        combined_policy.evaluate(env, 100, player)
+        combined_policy.evaluate(env, 1000, player)
         combined_policy.single_run(env, player)
         # if i >= 20:
         #     combined_policy.exploration_coeff *= 0.3
@@ -94,9 +97,8 @@ def train_agent(
 
 def train_stage(
     combined_policy: CombinedPolicy,
-    env: EnvBase,
+    env: "EnvironmentBase",
     training_configs: tuple[TrainingConfig, TrainingConfig],
-    device: torch.device | str,
     num_envs: int,
     pbar: tqdm,
 ) -> None:
@@ -109,7 +111,6 @@ def train_stage(
             env,
             player=player,
             training_config=training_config,
-            device=device,
             num_envs=num_envs,
             pbar=pbar,
         )

@@ -21,18 +21,19 @@ import wandb
 from config import TrainingConfig, LossConfig, HeadConfig, AgentNNConfig, BackboneConfig
 from .base import BaseAgent, BaseTrainableAgent
 from .keys_processors import CombinedExtractor, GraphXExtractor, PositionIntLastExtractor, AvailableMovesIntExtractor, LastActionExtractor, StepCountExtractor
-from environments.config import EnvMapper
+from environments.env_mapper import EnvMapper
 
 
 class BackboneBase(nn.Module, ABC):
     def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int,
-                 max_sequence_size: int) -> None:
+                 max_sequence_size: int, device: torch.device | str) -> None:
         super().__init__()
 
         self.extractor = extractor
         self.embedding_size = embedding_size
         self.max_sequence_size = max_sequence_size
         self.config = config
+        self.device = device
 
     def to_module(self) -> TensorDictModule:
         return TensorDictModule(
@@ -47,12 +48,13 @@ class BackboneBase(nn.Module, ABC):
 
 
 class Backbone(BackboneBase):
-    def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int, max_sequence_size: int) -> None:
+    def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int, max_sequence_size: int, device: torch.device | str) -> None:
         super().__init__(
             config=config,
             extractor=extractor,
             embedding_size=embedding_size,
             max_sequence_size=max_sequence_size,
+            device=device,
         )
         assert "x" in self.extractor.input_size and len(self.extractor.input_size) == 1, "Backbone expects a single input size for 'x'."
 
@@ -68,7 +70,7 @@ class Backbone(BackboneBase):
         Forward method that processes the current step and observed node owners to produce an embedding.
         """
         x = self.extractor.process(*args)["x"]
-        out = self.feature_extractor(x)
+        out = self.feature_extractor(x.to(self.device))
 
         return out
 
@@ -91,12 +93,13 @@ class _Linear(nn.Linear):
 
 class GNNBackbone(BackboneBase):
     def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int,
-                 max_sequence_size: int) -> None:
+                 max_sequence_size: int, device: torch.device | str) -> None:
         super().__init__(
             config=config,
             extractor=extractor,
             embedding_size=embedding_size,
             max_sequence_size=max_sequence_size,
+            device=device,
         )
         assert "graph_x" in self.extractor.input_size, "Backbone expects 'graph_x' in input size."
         assert "graph_edge_index" in self.extractor.input_size, "Backbone expects 'graph_edge_index' in input keys."
@@ -153,6 +156,8 @@ class GNNBackbone(BackboneBase):
             assert graph_x.ndim == 2, "Input tensor must be 2D or 3D"
             all_positions = torch.cat([available_moves, position], dim=0)
 
+        graph_x = graph_x.to(self.device)
+        graph_edges = graph_edges.to(self.device)
         for conv_layer in self.graph_conv:
             graph_x = conv_layer(graph_x, graph_edges)
             graph_x = torch.relu(graph_x)
@@ -162,7 +167,6 @@ class GNNBackbone(BackboneBase):
             current_x = current_x.reshape(*org_batches, -1)
         else:
             current_x = current_x.reshape(-1)
-
 
         current_x = torch.cat([
             current_x,
@@ -176,12 +180,13 @@ class GNNBackbone(BackboneBase):
 
 class ObservationEmbedding(BackboneBase):
     def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int,
-                 max_sequence_size: int) -> None:
+                 max_sequence_size: int, device: torch.device | str) -> None:
         super().__init__(
             config=config,
             extractor=extractor,
             embedding_size=embedding_size,
             max_sequence_size=max_sequence_size,
+            device=device,
         )
         assert "x" in extractor.input_size, "ObservationEmbedding expects 'x' in input size."
 
@@ -197,7 +202,7 @@ class ObservationEmbedding(BackboneBase):
         if x.ndim == 2:
             expanded = True
             x = x.unsqueeze(0)
-        x = self.activation(self.linear_projection(x))
+        x = self.activation(self.linear_projection(x.to(self.device)))
         if expanded:
             x = x.squeeze(0)
         return x
@@ -276,7 +281,7 @@ class BackboneTransformer(BackboneBase):
 
 
 class ActorHead(nn.Module):
-    def __init__(self, embedding_size: int, player_type: int, action_spec: Bounded, hidden_size: int) -> None:
+    def __init__(self, embedding_size: int, player_type: int, action_spec: Bounded, hidden_size: int, device: torch.device | str) -> None:
         super().__init__()
 
         self.actor_head = nn.Sequential(
@@ -287,6 +292,7 @@ class ActorHead(nn.Module):
         self.do_sample = True
         self.action_spec = action_spec
         self.player_type = player_type
+        self.device = device
 
     def to_module(self) -> ProbabilisticActor:
         return ProbabilisticActor(
@@ -300,15 +306,18 @@ class ActorHead(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, actions_mask: torch.Tensor) -> torch.Tensor:
-        x = self.actor_head(x).clone()
+        x_device = x.device
+        x = self.actor_head(x.to(self.device))
+        x = x.to(x_device)
         x[~actions_mask[..., self.player_type, :]] = -1e8  # Mask invalid actions
         return x
 
 
 class ValueHead(nn.Module):
-    def __init__(self, embedding_size: int, hidden_size: int) -> None:
+    def __init__(self, embedding_size: int, hidden_size: int, device: torch.device | str) -> None:
         super().__init__()
 
+        self.device = device
         self.value_head = nn.Sequential(
             nn.Linear(embedding_size, hidden_size),
             nn.ReLU(),
@@ -321,7 +330,8 @@ class ValueHead(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.value_head(x)
+        x_device = x.device
+        return self.value_head(x.to(self.device)).to(x_device)
 
 
 class NNAgentPolicy(BaseAgent):
@@ -358,6 +368,7 @@ class NNAgentPolicy(BaseAgent):
             extractor=extractor,
             embedding_size=agent_config.embedding_size,
             max_sequence_size=max_sequence_size,
+            device=self._device,
         ).to(self._device)
 
         actor_head = ActorHead(
@@ -365,10 +376,12 @@ class NNAgentPolicy(BaseAgent):
             player_type=player_type,
             action_spec=action_spec,
             hidden_size=head_config.hidden_size,
+            device=self._device,
         ).to(self._device)
         value_head = ValueHead(
             embedding_size=agent_config.embedding_size,
             hidden_size=head_config.hidden_size,
+            device=self._device,
         ).to(self._device)
 
         self.agent = ActorValueOperator(
@@ -540,7 +553,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
         tensordict_data["next"].update({
             "reward": tensordict_data["next"]["reward"][..., self.player_type].unsqueeze(-1),  # retain dimensionality
         })
-        tensordict_data = tensordict_data.to(self._device)
+        # tensordict_data = tensordict_data.to(self._device)
 
         cycle_data = {
             "loss_objective": [],
