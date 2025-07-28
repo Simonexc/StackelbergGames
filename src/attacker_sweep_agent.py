@@ -19,6 +19,9 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    
+    torch.multiprocessing.set_start_method('spawn', force=True)
+    torch.multiprocessing.set_sharing_strategy('file_system')
 
     env_config = dotenv_values("../.env")
 
