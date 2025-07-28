@@ -3,7 +3,7 @@
 #SBATCH --job-name=stackelberg_single_training
 #SBATCH --nodes=1
 #SBATCH --ntasks=5
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=12
 #SBATCH --mem-per-cpu=4G
 #SBATCH --gres=gpu:a100:1
 #SBATCH --output=slurm_logs/stackelberg_agents_%j.out
@@ -19,11 +19,12 @@ export TMPDIR=/mnt/evafs/scratch/shared/strochimiak/tmp/$SLURM_JOB_ID
 mkdir -p $TMPDIR
 
 cd /home2/faculty/strochimiak/StackelbergGames/src
-/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py mvkshiv4 # &
-# /home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py oi5o2xsv &
-# /home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py ntpdc9kl &
-# /home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py 752mct0e &
-# wait
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py mvkshiv4 &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py oi5o2xsv &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py ntpdc9kl &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py axb2luhh &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py 752mct0e &
+wait
 rm -rf $TMPDIR
 
 date
