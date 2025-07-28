@@ -70,9 +70,9 @@ parameters:
         - NodeRewardInfoLastExtractor
 
   num_nodes:
-    value: 30
+    value: 20
   num_steps:
-    value: 70
+    value: 40
   seed:
     value: 41
   env_name:
