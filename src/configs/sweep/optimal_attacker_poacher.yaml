@@ -45,8 +45,8 @@ parameters:
     min: 0.0
     max: 1.0
 
-  use_transformer_backbone:
-    value: false
+  cls_name_backbone:
+    value: Backbone
   embedding_size:
     distribution: q_log_uniform_values
     min: 8
@@ -54,19 +54,20 @@ parameters:
   hidden_size_backbone:
     distribution: q_log_uniform_values
     min: 8
-    max: 128
+    max: 256
   hidden_size_head:
     distribution: q_log_uniform_values
     min: 8
     max: 256
   keys_backbone:
     value:
-      - StepCountExtractor
-      - LastActionExtractor
-      - PositionLastExtractor
-      - TrackValueLastExtractor
-      - AvailableMovesLastExtractor
-      - NodeRewardInfoLastExtractor
+      x:
+        - StepCountExtractor
+        - LastActionExtractor
+        - PositionLastExtractor
+        - TrackValueLastExtractor
+        - AvailableMovesLastExtractor
+        - NodeRewardInfoLastExtractor
 
   num_nodes:
     value: 30
