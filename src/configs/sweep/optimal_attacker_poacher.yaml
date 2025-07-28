@@ -13,9 +13,9 @@ parameters:
     min: 2
     max: 20
   steps_per_batch_attacker:
-    value: 10000
+    value: 1000
   sub_batch_size_attacker:
-    value: 5000
+    value: 500
 
   learning_rate_attacker:
     distribution: log_uniform_values

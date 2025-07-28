@@ -138,14 +138,16 @@ class GNNBackbone(BackboneBase):
             graph_x = graph_x.flatten(0, -3)  # Flatten all but the last two dimensions
             position = position.flatten(0, -2)  # Flatten all but the last dimension
             available_moves = available_moves.flatten(0, -2)  # Flatten all but the last dimension
+            if graph_edges.ndim > 2:
+                graph_edges = graph_edges.flatten(0, -3)
 
             batch_size = graph_x.shape[0]
-            addition = torch.arange(batch_size, device=graph_x.device) * graph_x.shape[1]
-            graph_x = graph_x.flatten(0, 1)
-            if graph_edges.ndim == 3:
-                graph_edges = graph_edges[0].repeat(batch_size, 1, 1)
+            if graph_edges.ndim == 2:
+                graph_edges = graph_edges.repeat(batch_size, 1, 1)  # Repeat edges for each batch
             else:
-                graph_edges = graph_edges.repeat(batch_size, 1, 1)
+                graph_edges = graph_edges[0].repeat(batch_size, 1, 1)
+            addition = torch.arange(batch_size, device=graph_x.device) * graph_x.shape[2]
+            graph_x = graph_x.flatten(0, 1)
             graph_edges += addition.reshape(-1, 1, 1)  # Adjust edges for batch size
             graph_edges = graph_edges.transpose(1, 0).reshape(2, -1)
             all_positions = torch.cat([
@@ -170,7 +172,7 @@ class GNNBackbone(BackboneBase):
 
         current_x = torch.cat([
             current_x,
-            x,
+            x.to(self.device),
         ], dim=-1)
 
         projected = self.output_projection(current_x)
@@ -210,12 +212,13 @@ class ObservationEmbedding(BackboneBase):
 
 class BackboneTransformer(BackboneBase):
     def __init__(self, config: BackboneConfig, extractor: CombinedExtractor, embedding_size: int,
-                 max_sequence_size: int) -> None:
+                 max_sequence_size: int, device: torch.device | str) -> None:
         super().__init__(
             config=config,
             extractor=extractor,
             embedding_size=embedding_size,
             max_sequence_size=max_sequence_size,
+            device=device,
         )
         assert self.config.embedding_cls_name is not None, "Embedding class name must be provided in BackboneConfig."
 
@@ -224,6 +227,7 @@ class BackboneTransformer(BackboneBase):
             config=self.config,
             embedding_size=self.embedding_size,
             max_sequence_size=self.max_sequence_size,
+            device=self.device,
         )
         # Learned Positional Encodings (as per DTQN)
         self.positional_encoder = nn.Embedding(self.max_sequence_size, self.embedding_size)
@@ -262,12 +266,16 @@ class BackboneTransformer(BackboneBase):
         """
         embedded_obs = self.obs_embedding(*args)
         expanded = False
+        original_batch_shape = embedded_obs.shape[:-2]  # Keep the original batch shape
         if embedded_obs.ndim == 2:
             expanded = True
             embedded_obs = embedded_obs.unsqueeze(0)
+        else:
+            embedded_obs = embedded_obs.flatten(0, -3)
         positions_idx = torch.arange(0, self.max_sequence_size, dtype=torch.long, device=embedded_obs.device)
-        positions_idx = positions_idx.unsqueeze(0).expand(embedded_obs.size(0), -1)  # Expand to batch size
-
+        positions_idx = positions_idx.unsqueeze(0).expand(embedded_obs.shape[0], -1)  # Expand to batch size
+        # print(embedded_obs.shape, positions_idx.shape)
+        # x = embedded_obs + self.positional_encoder(positions_idx)
         x = embedded_obs + self.positional_encoder(positions_idx)
 
         causal_mask = self._generate_causal_mask(self.max_sequence_size).to(x.device)
@@ -277,6 +285,9 @@ class BackboneTransformer(BackboneBase):
 
         if expanded:
             output_sequence = output_sequence.squeeze(0)
+        else:
+            output_sequence = output_sequence.reshape(*original_batch_shape, -1)
+
         return output_sequence
 
 
@@ -542,6 +553,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
 
     def train_cycle(self, tensordict_data: TensorDictBase, replay_buffer: TensorDictReplayBuffer, cycle_num: int) -> float:
         self.train()
+        tensordict_data = tensordict_data.flatten()
 
         # update tensordict
         tensordict_data.update({
