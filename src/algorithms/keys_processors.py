@@ -251,14 +251,14 @@ class NodeRewardInfoLastExtractor(TensorDictKeyExtractorBase):
 
 
 class GraphXExtractor(TensorDictKeyExtractorBase):
-    KEY = "graph_x"
+    KEY = "graph_x_seq"
 
     @property
     def expected_size(self) -> int:
         return self._env.graph_x_size
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
-        return value[..., self._player_type, :, :]
+        return value[..., self._player_type, -1, :, :]
 
 
 class GraphXSeqExtractor(TensorDictKeyExtractorBase):
