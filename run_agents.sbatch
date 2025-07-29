@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=stackelberg_single_training
 #SBATCH --nodes=1
-#SBATCH --ntasks=5
+#SBATCH --ntasks=3
 #SBATCH --cpus-per-task=12
 #SBATCH --mem-per-cpu=4G
 #SBATCH --gres=gpu:a100:1
@@ -19,8 +19,9 @@ export TMPDIR=/mnt/evafs/scratch/shared/strochimiak/tmp/$SLURM_JOB_ID
 mkdir -p $TMPDIR
 
 cd /home2/faculty/strochimiak/StackelbergGames/src
-/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py xvainv8x &
-/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py kvu87d6x &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py 4e1l8pxv &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py b4kskf94 &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py jlorje1z &
 wait
 rm -rf $TMPDIR
 
