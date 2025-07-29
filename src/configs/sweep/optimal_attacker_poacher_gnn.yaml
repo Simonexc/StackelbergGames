@@ -1,4 +1,4 @@
-name: single_attacker_poacher_gnn_transformer
+name: single_attacker_poacher_gnn
 method: bayes
 metric:
   goal: maximize
@@ -64,24 +64,22 @@ parameters:
   keys_backbone:
     value:
       x:
-        - ActionsExtractor
-        - StepCountSeqExtractor
+        - LastActionExtractor
+        - StepCountExtractor
       graph_x:
-        - GraphXSeqExtractor
+        - GraphXExtractor
       position:
-        - PositionIntSeqExtractor
+        - PositionIntLastExtractor
       available_moves:
-        - AvailableMovesIntSeqExtractor
+        - AvailableMovesIntExtractor
       graph_edge_index:
         - GraphEdgeIndexExtractor
   cls_name_backbone:
-    value: BackboneTransformer
-  embedding_cls_name_backbone:
     value: GNNBackbone
   num_nodes:
-    value: 15
+    value: 5
   num_steps:
-    value: 30
+    value: 15
   seed:
     value: 41
   env_name:

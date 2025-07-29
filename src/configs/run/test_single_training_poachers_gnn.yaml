@@ -26,10 +26,10 @@ critic_coef_defender:  0.15
 learning_rate_defender: 0.002
 max_grad_norm_defender: 0.3
 
-embedding_size: 256
+embedding_size: 20
 cls_name_backbone: GNNBackbone
-hidden_size_backbone: 256
-hidden_size_head: 256
+hidden_size_backbone: 20
+hidden_size_head: 20
 keys_backbone:
   x:
     - LastActionExtractor
