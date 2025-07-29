@@ -77,9 +77,9 @@ parameters:
   cls_name_backbone:
     value: GNNBackbone
   num_nodes:
-    value: 5
+    value: 20
   num_steps:
-    value: 15
+    value: 40
   seed:
     value: 41
   env_name:
