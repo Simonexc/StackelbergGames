@@ -8,7 +8,7 @@
 #SBATCH --gres=gpu:a100:1
 #SBATCH --output=slurm_logs/stackelberg_agents_%j.out
 #SBATCH --error=slurm_logs/stackelberg_agents_%j.err
-#SBATCH --time=1-00:00:00
+#SBATCH --time=3-00:00:00
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=01153165@pw.edu.pl
 #SBATCH --account=mandziuk-lab
