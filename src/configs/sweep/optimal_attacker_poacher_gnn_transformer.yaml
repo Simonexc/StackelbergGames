@@ -48,19 +48,23 @@ parameters:
   embedding_size:
     distribution: q_log_uniform_values
     min: 8
-    max: 256
+    max: 128
   hidden_size_backbone:
+    distribution: q_log_uniform_values
+    min: 8
+    max: 64
+  d_model_backbone:
     distribution: q_log_uniform_values
     min: 8
     max: 256
   hidden_size_head:
     distribution: q_log_uniform_values
     min: 8
-    max: 256
+    max: 128
   num_head_backbone:
     distribution: q_uniform
     min: 1
-    max: 16
+    max: 12
   keys_backbone:
     value:
       x:
@@ -79,9 +83,9 @@ parameters:
   embedding_cls_name_backbone:
     value: GNNBackbone
   num_nodes:
-    value: 20
+    value: 15
   num_steps:
-    value: 40
+    value: 30
   seed:
     value: 41
   env_name:
