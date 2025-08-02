@@ -28,8 +28,8 @@ max_grad_norm_defender: 0.7
 
 
 cls_name_backbone: Backbone
-embedding_size: 128
-hidden_size_backbone: 128
+embedding_size: 256
+hidden_size_backbone: 256
 hidden_size_head: 256
 keys_backbone:
   x:
