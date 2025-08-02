@@ -311,8 +311,7 @@ class PoachersEnv(EnvironmentBase):
                 self.nodes_prepared[attackers_node] = True
                 rewards[prepare_mask] += self.map.x[attackers_node, 1]  # Upgrade cost
             else:
-                rewards[1] += self.INVALID_MOVE_PENALTY
-                is_terminated[0] = True
+                raise ValueError(f"Invalid action detected: {actions}. Cannot prepare node {attackers_node}.")
 
         # Collect
         collect_mask = actions == 6
@@ -330,8 +329,7 @@ class PoachersEnv(EnvironmentBase):
                 rewards[1] += self.map.x[attackers_node, 0]  # Node reward
                 rewards[0] -= self.map.x[attackers_node, 0]
             else:
-                rewards[1] += self.INVALID_MOVE_PENALTY
-                is_terminated[0] = True
+                raise ValueError(f"Invalid action detected: {actions}. Cannot collect node {attackers_node}.")
 
         # Check if all reward nodes are collected
         if self.nodes_collected[self.map.reward_nodes].all():

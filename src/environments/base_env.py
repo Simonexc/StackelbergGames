@@ -124,6 +124,11 @@ class EnvironmentBase(EnvBase, ABC):
                     dtype=torch.int32,
                     device=self.device,
                 ),
+                "game_id": Unbounded(
+                    shape=torch.Size((*self.batch_size, 16)),  # UUID as 16 bytes
+                    dtype=torch.uint8,
+                    device=self.device,
+                ),
                 "actions_seq": Bounded(
                     low=-1,  # -1 means unobserved
                     high=self.action_size - 1,
@@ -134,7 +139,7 @@ class EnvironmentBase(EnvBase, ABC):
                 "actions_mask": Bounded(
                     low=0,
                     high=1,
-                    shape=torch.Size((*self.batch_size, 2, self.map.num_nodes * 2)),
+                    shape=torch.Size((*self.batch_size, 2, self.action_size)),
                     dtype=torch.bool,
                     device=self.device,
                 ),
@@ -259,6 +264,7 @@ class EnvironmentBase(EnvBase, ABC):
 
     @final
     def _step(self, tensordict: TensorDictBase) -> TensorDictBase:
+        assert tensordict.batch_size == torch.Size(()), "Batch size must be empty for step method."
         actions = tensordict["action"]
         previous_actions_seq = tensordict["actions_seq"][..., 1:]
         previous_step_count_seq = tensordict["step_count_seq"][..., 1:]
@@ -289,6 +295,7 @@ class EnvironmentBase(EnvBase, ABC):
                     previous_graph_x_seq,
                     graph_x.unsqueeze(-3),
                 ], dim=-3),
+                "game_id": self.game_id.clone(),
                 "graph_edge_index": self.map.edge_index.clone(),
                 **step_output,
             },

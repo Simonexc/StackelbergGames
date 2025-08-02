@@ -95,9 +95,10 @@ class CombinedPolicy(nn.Module):
         return self.attacker_module
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
+        current_device = tensordict.device
         with torch.no_grad():
-            defender_output = self._defender_module(tensordict.clone())
-            attacker_output = self._attacker_module(tensordict)
+            defender_output = self._defender_module(tensordict.clone()).detach().to(current_device)
+            attacker_output = self._attacker_module(tensordict).detach().to(current_device)
 
         defender_embedding = defender_output["embedding"].clone()
         attacker_embedding = attacker_output["embedding"]

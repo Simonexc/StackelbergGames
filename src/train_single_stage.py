@@ -15,6 +15,7 @@ from algorithms.keys_processors import CombinedExtractor
 from algorithms.generator import AgentGenerator
 from config import TrainingConfig, LossConfig, EnvConfig, Player, AgentNNConfig, BackboneConfig, HeadConfig
 from utils import train_agent
+from environments.env_mapper import EnvMapper
 
 
 env_config = dotenv_values("../.env")
@@ -35,7 +36,7 @@ def model_factory(env, backbone_config, env_config, training_config, agent_confi
             max_sequence_size=env_config.num_steps + 1,
             extractor=defender_extractor,
             action_size=env.action_size,
-            env_type=env_config.env_pair,
+            env_type=EnvMapper.from_name(env_config.env_name),
             device=device,
             loss_config=loss_config,
             training_config=training_config,
@@ -72,7 +73,7 @@ def model_factory(env, backbone_config, env_config, training_config, agent_confi
             max_sequence_size=env_config.num_steps + 1,
             extractor=attacker_extractor,
             action_size=env.action_size,
-            env_type=env_config.env_pair,
+            env_type=EnvMapper.from_name(env_config.env_name),
             device=device,
             loss_config=loss_config,
             training_config=training_config,

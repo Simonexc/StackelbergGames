@@ -318,10 +318,12 @@ class ActorHead(nn.Module):
 
     def forward(self, x: torch.Tensor, actions_mask: torch.Tensor) -> torch.Tensor:
         x_device = x.device
+        is_grad = x.requires_grad
         x = self.actor_head(x.to(self.device))
-        x = x.to(x_device)
         x[~actions_mask[..., self.player_type, :]] = -1e8  # Mask invalid actions
-        return x
+        if is_grad:
+            return x
+        return x.to(x_device)  # Ensure output is on the original device
 
 
 class ValueHead(nn.Module):
@@ -342,7 +344,11 @@ class ValueHead(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_device = x.device
-        return self.value_head(x.to(self.device)).to(x_device)
+        is_grad = x.requires_grad
+        output = self.value_head(x.to(self.device))
+        if is_grad:
+            return output
+        return output.to(x_device)  # Ensure output is on the original device
 
 
 class NNAgentPolicy(BaseAgent):
@@ -464,7 +470,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
         )
 
         self.advantage = GAE(
-            gamma=loss_config.gamma, lmbda=loss_config.lmbda, value_network=self.agent.get_value_head(), average_gae=False
+            gamma=loss_config.gamma, lmbda=loss_config.lmbda, value_network=self.agent.get_value_head(), average_gae=False#, device=torch.device("cuda:0")
         )
 
         self.optimizer = torch.optim.Adam(
@@ -481,7 +487,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
             )
 
     def _training_step(self, tensordict: TensorDictBase) -> dict:
-        loss_vals = self.loss(tensordict.to(self._device))
+        loss_vals = self.loss(tensordict)
         loss_value = (
             loss_vals["loss_objective"]  # **2
             + loss_vals["loss_critic"]  # **2
@@ -490,6 +496,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
 
         self.optimizer.zero_grad()
         loss_value.backward()
+
         torch.nn.utils.clip_grad_norm_(self.loss.parameters(), self._loss_config.max_grad_norm)
         self.optimizer.step()
 
@@ -524,8 +531,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
             # The ClipPPOLoss will normalize advantage internally. We apply weights
             # before this normalization happens by modifying the tensordict.
             # subdata["advantage"] = subdata["advantage"] * info["_weight"].unsqueeze(-1)
-
-            loss_vals = self._training_step(subdata)
+            loss_vals = self._training_step(subdata.to(self._device))
 
             epoch_data["loss_objective"].append(loss_vals["loss_objective"].item())
             epoch_data["loss_critic"].append(loss_vals["loss_critic"].item())
@@ -584,7 +590,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
             priorities = tensordict_data["advantage"].abs() + 1e-6  # Add epsilon for stability
             # The sampler expects a "_priority" key. Squeeze to remove the last dim.
             tensordict_data.set("priority", priorities.squeeze(-1))
-            tensordict_data.set("index", torch.arange(tensordict_data.batch_size.numel(), device=self._device).reshape(*tensordict_data.batch_size))
+            tensordict_data.set("index", torch.arange(tensordict_data.batch_size.numel(), device=tensordict_data.device).reshape(*tensordict_data.batch_size))
 
             replay_buffer.empty()
             replay_buffer.extend(tensordict_data)
@@ -625,13 +631,14 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
                 for i in range(self.action_size):
                     action_count = (tensordict_data["action"] == i).sum().item() / total_actions
                     log_dict[f"actions/action_{i}_{self.player_name}"] = action_count
-                log_dict["actions/avg_length"] = tensordict_data["next"]["done"].numel() / tensordict_data["next"]["done"].sum().item()
+
+                log_dict["actions/avg_length"] = tensordict_data["next"]["done"].numel() / max(tensordict_data["next"]["done"].sum().item(), 1)
 
             wandb.log(log_dict)
 
         del tensordict_data
-        torch.cuda.empty_cache()
-        gc.collect()
+        #torch.cuda.empty_cache()
+        #gc.collect()
 
         self.num_cycle += 1
         if self.scheduler is not None:

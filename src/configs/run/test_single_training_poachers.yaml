@@ -1,30 +1,30 @@
 player_turns_attacker: 1
-total_steps_per_turn_attacker: 1000000
+total_steps_per_turn_attacker: 300000
 epochs_per_batch_attacker: 15
 steps_per_batch_attacker: 10000
 sub_batch_size_attacker: 5000
 
 clip_epsilon_attacker: 0.25
 gamma_attacker: 0.99
-lmbda_attacker: 0.9
-entropy_eps_attacker: 0.1
-critic_coef_attacker:  1.0
-learning_rate_attacker: 0.001
-max_grad_norm_attacker: 0.5
+lmbda_attacker: 0.92
+entropy_eps_attacker: 0.01
+critic_coef_attacker:  0.45
+learning_rate_attacker: 0.01
+max_grad_norm_attacker: 0.7
 
 player_turns_defender: 1
-total_steps_per_turn_defender: 1000000
+total_steps_per_turn_defender: 300000
 epochs_per_batch_defender: 15
-steps_per_batch_defender: 10000
-sub_batch_size_defender: 5000
+steps_per_batch_defender: 2400
+sub_batch_size_defender: 600
 
 clip_epsilon_defender: 0.25
 gamma_defender: 0.99
-lmbda_defender: 0.9
-entropy_eps_defender: 0.1
-critic_coef_defender:  1.0
-learning_rate_defender: 0.001
-max_grad_norm_defender: 0.5
+lmbda_defender: 0.92
+entropy_eps_defender: 0.01
+critic_coef_defender:  0.45
+learning_rate_defender: 0.01
+max_grad_norm_defender: 0.7
 
 
 cls_name_backbone: Backbone

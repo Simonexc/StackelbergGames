@@ -89,12 +89,10 @@ class EnvConfig(FromDictMixin):
     seed: int
     num_nodes: int
 
-    def __post_init__(self) -> None:
-        self.env_pair = EnvMapper.from_name(self.env_name)
-
     def create(self, device: torch.device | str | None = None):
-        map_obj = self.env_pair.value.map_class(self, device=device)
-        env_obj = self.env_pair.value.env_class(self, map_obj, device=device)
+        env_pair = EnvMapper.from_name(self.env_name)
+        map_obj = env_pair.value.map_class(self, device=device)
+        env_obj = env_pair.value.env_class(self, map_obj, device=device)
         return map_obj, env_obj
 
 

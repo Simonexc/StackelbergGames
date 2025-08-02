@@ -6,11 +6,11 @@ from tensordict.nn.probabilistic import InteractionType as ExplorationType
 import torch
 from tqdm import tqdm
 from torch import nn
-from torchrl.collectors import MultiSyncDataCollector
+from torchrl.collectors import MultiSyncDataCollector, SyncDataCollector
 from torchrl.data.replay_buffers import ReplayBuffer, TensorDictReplayBuffer
 from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement, PrioritizedSampler
 from torchrl.data.replay_buffers.storages import LazyTensorStorage
-from torchrl.envs import EnvBase
+from torchrl.envs import EnvBase, ParallelEnv
 
 from config import TrainingConfig
 from algorithms.generic_policy import CombinedPolicy, MultiAgentPolicy, BaseAgent, GreedyOracleAgent, RandomAgent
@@ -24,7 +24,7 @@ def create_replay_buffer(config: TrainingConfig) -> ReplayBuffer:
         storage=LazyTensorStorage(max_size=config.steps_per_batch),
         sampler=PrioritizedSampler(max_capacity=config.steps_per_batch, alpha=0.7, beta=0.5),#SamplerWithoutReplacement(),
         priority_key="priority",
-        transform=lambda data: data.reshape(-1).cpu(),
+        # transform=lambda data: data.reshape(-1),
     )
 
 
@@ -37,11 +37,14 @@ def create_collector(
 ) -> MultiSyncDataCollector:
     return MultiSyncDataCollector(
         [env.create_from_self for _ in range(num_environments)],
+        #ParallelEnv(num_environments, env.create_from_self),
+        #env.create_from_self,
         policy=policy,
         frames_per_batch=config.steps_per_batch,
         total_frames=config.total_steps_per_turn,
         split_trajs=False,
         device=device,
+        policy_device="cuda:0",
         update_at_each_batch=True,
         exploration_type=ExplorationType.RANDOM,
     )
