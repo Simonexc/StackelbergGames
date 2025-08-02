@@ -587,10 +587,10 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
                 tensordict_data["next"].update(self.agent.module[0](tensordict_data["next"]))
                 tensordict_data.update(self.agent.module[0](tensordict_data))
             self.advantage(tensordict_data)
-            priorities = tensordict_data["advantage"].abs() + 1e-6  # Add epsilon for stability
+            #priorities = tensordict_data["advantage"].abs() + 1e-6  # Add epsilon for stability
             # The sampler expects a "_priority" key. Squeeze to remove the last dim.
-            tensordict_data.set("priority", priorities.squeeze(-1))
-            tensordict_data.set("index", torch.arange(tensordict_data.batch_size.numel(), device=tensordict_data.device).reshape(*tensordict_data.batch_size))
+            #tensordict_data.set("priority", priorities.squeeze(-1))
+            #tensordict_data.set("index", torch.arange(tensordict_data.batch_size.numel(), device=tensordict_data.device).reshape(*tensordict_data.batch_size))
 
             replay_buffer.empty()
             replay_buffer.extend(tensordict_data)

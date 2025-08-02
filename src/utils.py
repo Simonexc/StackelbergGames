@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 def create_replay_buffer(config: TrainingConfig) -> ReplayBuffer:
     return TensorDictReplayBuffer(
         storage=LazyTensorStorage(max_size=config.steps_per_batch),
-        sampler=PrioritizedSampler(max_capacity=config.steps_per_batch, alpha=0.7, beta=0.5),#SamplerWithoutReplacement(),
+        sampler=SamplerWithoutReplacement(), # PrioritizedSampler(max_capacity=config.steps_per_batch, alpha=0.7, beta=0.5)
         priority_key="priority",
         # transform=lambda data: data.reshape(-1),
     )
