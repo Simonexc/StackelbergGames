@@ -10,7 +10,7 @@ from torchrl.data import ReplayBuffer
 from config import Player
 
 
-env_config = dotenv_values("../../.env")
+env_config = dotenv_values("../.env")
 
 
 class BaseAgent(nn.Module, ABC):
