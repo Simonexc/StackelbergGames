@@ -1,8 +1,8 @@
 player_turns_attacker: 1
 total_steps_per_turn_attacker: 300000
 epochs_per_batch_attacker: 10
-steps_per_batch_attacker: 10000
-sub_batch_size_attacker: 5000
+steps_per_batch_attacker: 2048
+sub_batch_size_attacker: 512
 
 clip_epsilon_attacker: 0.35
 gamma_attacker: 0.99
@@ -26,10 +26,10 @@ critic_coef_defender:  0.15
 learning_rate_defender: 0.002
 max_grad_norm_defender: 0.3
 
-embedding_size: 20
+embedding_size: 256
 cls_name_backbone: GNNBackbone
-hidden_size_backbone: 20
-hidden_size_head: 20
+hidden_size_backbone: 256
+hidden_size_head: 256
 keys_backbone:
   x:
     - LastActionExtractor

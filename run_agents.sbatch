@@ -19,11 +19,11 @@ export TMPDIR=/mnt/evafs/scratch/shared/strochimiak/tmp/$SLURM_JOB_ID
 mkdir -p $TMPDIR
 
 cd /home2/faculty/strochimiak/StackelbergGames/src
-/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py y26vnt8o &
-/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py zcy4vjrn &
-/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py xw698eak &
-/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py 8tuxcbcz &
-/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py o4k3rphq &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py 65ggf4n7 &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py ct8r35yp &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py 8xux5wra &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py d1byc1ch &
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python attacker_sweep_agent.py g5ghksla &
 wait
 rm -rf $TMPDIR
 

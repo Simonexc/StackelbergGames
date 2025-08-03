@@ -7,20 +7,20 @@ parameters:
   player_turns_attacker:
     value: 1
   total_steps_per_turn_attacker:
-    value: 1000000
+    value: 300000
   epochs_per_batch_attacker:
     distribution: q_uniform
     min: 2
     max: 20
   steps_per_batch_attacker:
-    value: 10000
+    value: 2048
   sub_batch_size_attacker:
-    value: 5000
+    value: 512
 
   learning_rate_attacker:
     distribution: log_uniform_values
-    min: 0.000001
-    max: 0.1
+    min: 0.0000001
+    max: 0.01
   max_grad_norm_attacker:
     distribution: uniform
     min: 0.0
@@ -28,18 +28,20 @@ parameters:
 
   clip_epsilon_attacker:
     distribution: uniform
-    min: 0.0
+    min: 0.05
     max: 0.5
   gamma_attacker:
-    value: 0.99
+    distribution: log_uniform_values
+    min: 0.9
+    max: 0.9999
   lmbda_attacker:
     distribution: uniform
-    min: 0.8
-    max: 0.9999
+    min: 0.9
+    max: 0.99
   entropy_eps_attacker:
-    distribution: uniform
-    min: 0.0
-    max: 0.5
+    distribution: log_uniform_values
+    min: 0.00001
+    max: 0.1
   critic_coef_attacker:
     distribution: uniform
     min: 0.0
@@ -57,10 +59,6 @@ parameters:
     distribution: q_log_uniform_values
     min: 8
     max: 256
-  num_head_backbone:
-    distribution: q_uniform
-    min: 1
-    max: 16
   keys_backbone:
     value:
       x:
@@ -77,9 +75,9 @@ parameters:
   cls_name_backbone:
     value: GNNBackbone
   num_nodes:
-    value: 20
+    value: 30
   num_steps:
-    value: 40
+    value: 70
   seed:
     value: 41
   env_name:
