@@ -29,8 +29,9 @@ max_grad_norm_defender: 0.7
 
 cls_name_backbone: Backbone
 embedding_size: 256
-hidden_size_backbone: 256
+hidden_size_backbone: 32
 hidden_size_head: 256
+d_model_backbone: 256
 keys_backbone:
   x:
     - StepCountExtractor
@@ -40,7 +41,7 @@ keys_backbone:
     - AvailableMovesLastExtractor
     - NodeRewardInfoLastExtractor
 
-num_nodes: 20
-num_steps: 40
+num_nodes: 10
+num_steps: 20
 seed: 41
 env_name: poachers
