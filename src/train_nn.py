@@ -14,6 +14,7 @@ from algorithms.generator import AgentGenerator
 from algorithms.keys_processors import CombinedExtractor
 from config import TrainingConfig, LossConfig, EnvConfig, AgentNNConfig, BackboneConfig, HeadConfig
 from utils import train_stage
+from environments.env_mapper import EnvMapper
 
 
 env_config = dotenv_values("../.env")
@@ -52,7 +53,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
         max_sequence_size=env_config_.num_steps + 1,
         extractor=defender_extractor,
         action_size=env.action_size,
-        env_type=env_config_.env_pair,
+        env_type=EnvMapper.from_name(env_config_.env_name),
         device=device,
         loss_config=loss_config_defender,
         training_config=training_config_defender,
@@ -75,7 +76,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
                 "extractor": attacker_extractor,
                 "max_sequence_size": env_config_.num_steps + 1,
                 "action_size": env.action_size,
-                "env_type": env_config_.env_pair,
+                "env_type": EnvMapper.from_name(env_config_.env_name),
                 "player_type": 1,
                 "device": device,
                 "loss_config": loss_config_attacker,
