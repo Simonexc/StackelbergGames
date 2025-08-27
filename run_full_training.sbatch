@@ -19,7 +19,7 @@ export TMPDIR=/mnt/evafs/scratch/shared/strochimiak/tmp/$SLURM_JOB_ID
 mkdir -p $TMPDIR
 
 cd /home2/faculty/strochimiak/StackelbergGames/src
-/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python full_training.py configs/run/test_full_training_poachers.yaml
+/home2/faculty/strochimiak/.pyenv/versions/stackelberg/bin/python train_nn.py configs/run/test_full_training_poachers.yaml
 
 rm -rf $TMPDIR
 
