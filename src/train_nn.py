@@ -45,7 +45,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
 
     assert training_config_attacker.player_turns == training_config_defender.player_turns
 
-    env_map, env = env_config_.create(device)
+    env_map, env = env_config_.create("cpu")
 
     defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=backbone_config.extractors)
     defender_agent = TrainableNNAgentPolicy(
