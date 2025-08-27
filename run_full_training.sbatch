@@ -3,7 +3,7 @@
 #SBATCH --job-name=stackelberg_full_nn_training
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=12
 #SBATCH --mem-per-cpu=4G
 #SBATCH --gres=gpu:a100:1
 #SBATCH --output=slurm_logs/stackelberg_full_nn_training_%j.out

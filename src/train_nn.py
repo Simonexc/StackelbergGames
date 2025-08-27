@@ -135,7 +135,7 @@ if __name__ == "__main__":
         else torch.device("cpu")
     )
     print(f"Using device: {device}")
-    cpu_cores = min(4, multiprocessing.cpu_count())
+    cpu_cores = min(12, multiprocessing.cpu_count())
     print(f"Creating {cpu_cores} processes.")
 
     with open(args.config, "r") as file:
