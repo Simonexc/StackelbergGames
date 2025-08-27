@@ -126,6 +126,8 @@ if __name__ == "__main__":
         help="Name of run",
     )
     args = parser.parse_args()
+    torch.multiprocessing.set_start_method('spawn', force=True)
+    torch.multiprocessing.set_sharing_strategy('file_system')
 
     # General settings defining environment
     is_fork = multiprocessing.get_start_method() == "fork"
