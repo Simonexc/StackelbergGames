@@ -1,0 +1,47 @@
+player_turns_attacker: 10
+total_steps_per_turn_attacker: 300000
+epochs_per_batch_attacker: 5
+steps_per_batch_attacker: 2048
+sub_batch_size_attacker: 512
+
+clip_epsilon_attacker: 0.3
+gamma_attacker: 0.94
+lmbda_attacker: 0.96
+entropy_eps_attacker: 0.0001
+critic_coef_attacker:  0.85
+learning_rate_attacker: 0.001
+max_grad_norm_attacker: 0.6
+
+player_turns_defender: 10
+total_steps_per_turn_defender: 300000
+epochs_per_batch_defender: 5
+steps_per_batch_defender: 2400
+sub_batch_size_defender: 600
+
+clip_epsilon_defender: 0.3
+gamma_defender: 0.94
+lmbda_defender: 0.96
+entropy_eps_defender: 0.0001
+critic_coef_defender:  0.85
+learning_rate_defender: 0.001
+max_grad_norm_defender: 0.6
+
+
+cls_name_backbone: Backbone
+embedding_size: 120
+hidden_size_backbone: 40
+hidden_size_head: 120
+d_model_backbone: 170
+keys_backbone:
+  x:
+    - StepCountExtractor
+    - LastActionExtractor
+    - PositionLastExtractor
+    - TrackValueLastExtractor
+    - AvailableMovesLastExtractor
+    - NodeRewardInfoLastExtractor
+
+num_nodes: 5
+num_steps: 15
+seed: 41
+env_name: poachers

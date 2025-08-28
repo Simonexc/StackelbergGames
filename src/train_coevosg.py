@@ -36,7 +36,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     env_config_ = EnvConfig.from_dict(config)
     coevosg_config = CoevoSGConfig.from_dict(config)
 
-    env_map, env = env_config_.create(device)
+    env_map, env = env_config_.create("cpu")
 
     ctx = torch.multiprocessing.get_context('spawn')
 
@@ -105,6 +105,8 @@ if __name__ == "__main__":
         help="Name of run",
     )
     args = parser.parse_args()
+    torch.multiprocessing.set_start_method('spawn', force=True)
+    torch.multiprocessing.set_sharing_strategy('file_system')
 
     # General settings defining environment
     is_fork = multiprocessing.get_start_method() == "fork"
@@ -114,7 +116,7 @@ if __name__ == "__main__":
         else torch.device("cpu")
     )
     print(f"Using device: {device}")
-    cpu_cores = multiprocessing.cpu_count()
+    cpu_cores = min(24, multiprocessing.cpu_count())
     print(f"Creating {cpu_cores} processes.")
 
     with open(args.config, "r") as file:
