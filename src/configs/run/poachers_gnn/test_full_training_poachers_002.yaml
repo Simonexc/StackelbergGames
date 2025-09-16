@@ -1,0 +1,51 @@
+player_turns_attacker: 10
+total_steps_per_turn_attacker: 300000
+epochs_per_batch_attacker: 10
+steps_per_batch_attacker: 2048
+sub_batch_size_attacker: 512
+
+clip_epsilon_attacker: 0.3
+gamma_attacker: 0.93
+lmbda_attacker: 0.94
+entropy_eps_attacker: 0.005
+critic_coef_attacker:  0.25
+learning_rate_attacker: 0.005
+max_grad_norm_attacker: 0.6
+
+player_turns_defender: 10
+total_steps_per_turn_defender: 300000
+epochs_per_batch_defender: 10
+steps_per_batch_defender: 2400
+sub_batch_size_defender: 600
+
+clip_epsilon_defender: 0.3
+gamma_defender: 0.93
+lmbda_defender: 0.94
+entropy_eps_defender: 0.005
+critic_coef_defender:  0.25
+learning_rate_defender: 0.005
+max_grad_norm_defender: 0.6
+
+
+cls_name_backbone: GNNBackbone
+embedding_size: 64
+hidden_size_backbone: 90
+hidden_size_head: 70
+d_model_backbone: 128
+keys_backbone:
+  x:
+    - LastActionExtractor
+    - StepCountExtractor
+  graph_x:
+    - GraphXExtractor
+  position:
+    - PositionIntLastExtractor
+  available_moves:
+    - AvailableMovesIntExtractor
+  graph_edge_index:
+    - GraphEdgeIndexExtractor
+
+num_nodes: 15
+num_steps: 30
+seed: 41
+env_name: poachers
