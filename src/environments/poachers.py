@@ -267,7 +267,7 @@ class PoachersEnv(EnvironmentBase):
             self.position[move_mask] = new_positions
             if (self.position == -1).any():
                 #raise ValueError(f"Invalid action detected: {actions}")
-                rewards[self.position[move_mask] == -1] -= 100.0  # Penalty for invalid move
+                rewards[self.position == -1] -= 100.0  # Penalty for invalid move
 
             rewards[move_mask] += self.map.move_cost
 

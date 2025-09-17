@@ -92,6 +92,58 @@ class ObservedNodeOwnersLastExtractor(TensorDictKeyExtractorBase):
         return value[..., self._player_type, -1, :].float()
 
 
+class AvailableMovesIntForFlipItExtractor(TensorDictKeyExtractorBase):
+    KEY = "observed_node_owners"
+
+    @property
+    def expected_size(self) -> int:
+        return self._env.map.num_nodes - 1
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        if value.ndim <= 3:
+            return torch.arange(1, value.shape[-1]).to(torch.long).to(value.device)
+        return torch.arange(1, value.shape[-1]).to(torch.long).repeat(*value.shape[:-3], 1).to(value.device)
+
+
+class AvailableMovesIntForFlipItSeqExtractor(TensorDictKeyExtractorBase):
+    KEY = "observed_node_owners"
+
+    @property
+    def expected_size(self) -> int:
+        return self._env.map.num_nodes - 1
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        if value.ndim <= 3:
+            return torch.arange(1, value.shape[-1]).to(torch.long).repeat(value.shape[-2], 1).to(value.device)
+        return torch.arange(1, value.shape[-1]).to(torch.long).repeat(*value.shape[:-3], value.shape[-2], 1).to(value.device)
+
+
+class PositionIntForFlipItExtractor(TensorDictKeyExtractorBase):
+    KEY = "observed_node_owners"
+
+    @property
+    def expected_size(self) -> int:
+        return 1
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        if value.ndim <= 3:
+            return torch.tensor([0], dtype=torch.long).to(value.device)
+        return torch.tensor([0], dtype=torch.long).repeat(*value.shape[:-3], 1).to(value.device)
+
+
+class PositionIntForFlipItSeqExtractor(TensorDictKeyExtractorBase):
+    KEY = "observed_node_owners"
+
+    @property
+    def expected_size(self) -> int:
+        return 1
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        if value.ndim <= 3:
+            return torch.tensor([0], dtype=torch.long).repeat(value.shape[-2], 1).to(value.device)
+        return torch.tensor([0], dtype=torch.long).repeat(*value.shape[:-3], value.shape[-2], 1).to(value.device)
+
+
 class ObservedNodeOwnersExtractor(TensorDictKeyExtractorBase):
     KEY = "observed_node_owners"
 

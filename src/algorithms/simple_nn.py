@@ -116,7 +116,7 @@ class GNNBackbone(BackboneBase):
 
         self.output_projection = nn.Sequential(
             nn.Linear(
-                self.config.hidden_size * 5 + self.extractor.input_size["x"],
+                self.config.hidden_size * (self.extractor.input_size["available_moves"] + 1) + self.extractor.input_size["x"],
                 self.embedding_size,
             ),
             nn.ReLU(),

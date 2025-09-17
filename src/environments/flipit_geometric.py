@@ -47,7 +47,7 @@ class FlipItEnv(EnvironmentBase):
 
     @property
     def graph_x_size(self) -> int:
-        return self.map.x.shape[-1]
+        return 3
 
     @property
     def actions_mask(self) -> torch.Tensor:
@@ -104,8 +104,20 @@ class FlipItEnv(EnvironmentBase):
         ).any(dim=1) | self.map.entry_nodes.to(self.device)[node_indices]  # is entry node
 
     def _get_graph_x(self, **kwargs: dict[str, torch.Tensor]) -> torch.Tensor:
-        # TODO: make it more meaningful
-        return self.map.x.clone()
+        observed_node_owners = kwargs["observed_node_owners"][..., -1, :]
+        node_features = self.map.x.clone()
+        defender = torch.cat([
+            node_features,
+            observed_node_owners[..., 0, :].unsqueeze(-1).to(torch.float32),
+        ], dim=-1)
+
+        attacker = torch.cat([
+            node_features,
+            observed_node_owners[..., 1, :].unsqueeze(-1).to(torch.float32),
+        ], dim=-1)
+
+        return torch.stack([defender, attacker], dim=-3)
+
 
     def _impl_step(
         self, tensordict: TensorDictBase, rewards: torch.Tensor, is_truncated: torch.Tensor, is_terminated: torch.Tensor
@@ -122,12 +134,12 @@ class FlipItEnv(EnvironmentBase):
         is_defender_flip = (defender_action_types == 0)
         is_attacker_flip = (attacker_action_types == 0)
         defender_flip_costs = torch.gather(
-            self.map.x[..., 1].expand(*self.batch_shape, self.map.num_nodes),
+            self.map.x[..., 1].expand(*self.batch_size, self.map.num_nodes),
             -1,
             defender_target_nodes.to(torch.int64),
         ).squeeze(-1)
         attacker_flip_costs = torch.gather(
-            self.map.x[..., 1].expand(*self.batch_shape, self.map.num_nodes),
+            self.map.x[..., 1].expand(*self.batch_size, self.map.num_nodes),
             -1,
             attacker_target_nodes.to(torch.int64),
         ).squeeze(-1)
