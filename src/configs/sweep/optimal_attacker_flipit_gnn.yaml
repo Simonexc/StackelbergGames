@@ -75,10 +75,10 @@ parameters:
   cls_name_backbone:
     value: GNNBackbone
   num_nodes:
-    value: 25
+    value: 30
   num_steps:
     value: 30
   seed:
     value: 41
   env_name:
-    value: poachers
+    value: flipit
