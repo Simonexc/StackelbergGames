@@ -43,7 +43,7 @@ keys_backbone:
   graph_edge_index:
     - GraphEdgeIndexExtractor
 
-num_nodes: 40 # 25
-num_steps: 20 # 15
+num_nodes: 25 # 25
+num_steps: 30 # 15
 seed: 41
 env_name: flipit
