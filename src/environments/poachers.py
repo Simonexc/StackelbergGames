@@ -107,11 +107,15 @@ class PoachersMap(EnvMapUndirected):
 
 
 class PoachersEnv(EnvironmentBase):
-    def __init__(self, config: "EnvConfig", env_map: PoachersMap, device: torch.device | str | None = None, batch_size: torch.Size | None = None) -> None:
+    def __init__(self, config: "EnvConfig", env_map: PoachersMap, device: torch.device | str | None = None, batch_size: torch.Size | None = None, freeze_start_point: bool = False) -> None:
         super().__init__(config, env_map, device, batch_size)
 
         # Set initial positions to two random entry nodes.
-        self.position = self.map.entry_nodes_list[torch.randperm(self.map.entry_nodes_list.shape[-1], generator=self._generator, device=self.device)[:2]]
+        if freeze_start_point:
+            self.position = self.map.entry_nodes_list[:2]
+        else:
+            self.position = self.map.entry_nodes_list[torch.randperm(self.map.entry_nodes_list.shape[-1], generator=self._generator, device=self.device)[:2]]
+        self.freeze_start_point = freeze_start_point
         self.nodes_prepared = torch.zeros(self.map.num_nodes, dtype=torch.bool, device=self.device)
         self.nodes_collected = torch.zeros(self.map.num_nodes, dtype=torch.bool, device=self.device)
 
@@ -213,9 +217,12 @@ class PoachersEnv(EnvironmentBase):
         return torch.stack([defender, attacker], dim=-3)
 
     def _impl_reset(self) -> dict[str, torch.Tensor]:
-        self.position = self.map.entry_nodes_list[
-            torch.randperm(self.map.entry_nodes_list.shape[-1], generator=self._generator, device=self.device)[:2]
-        ]
+        if self.freeze_start_point:
+            self.position = self.map.entry_nodes_list[:2]
+        else:
+            self.position = self.map.entry_nodes_list[
+                torch.randperm(self.map.entry_nodes_list.shape[-1], generator=self._generator, device=self.device)[:2]
+            ]
         position_seq = torch.full((*self.batch_size, 2, self.num_steps + 1), -1, dtype=torch.int64, device=self.device)
         position_seq[..., -1] = self.position.clone()
 
@@ -259,7 +266,8 @@ class PoachersEnv(EnvironmentBase):
             new_positions = move_positions[torch.arange(move_positions.shape[0]), move_actions]
             self.position[move_mask] = new_positions
             if (self.position == -1).any():
-                raise ValueError(f"Invalid action detected: {actions}")
+                #raise ValueError(f"Invalid action detected: {actions}")
+                rewards[self.position[move_mask] == -1] -= 100.0  # Penalty for invalid move
 
             rewards[move_mask] += self.map.move_cost
 
@@ -311,7 +319,8 @@ class PoachersEnv(EnvironmentBase):
                 self.nodes_prepared[attackers_node] = True
                 rewards[prepare_mask] += self.map.x[attackers_node, 1]  # Upgrade cost
             else:
-                raise ValueError(f"Invalid action detected: {actions}. Cannot prepare node {attackers_node}.")
+                #raise ValueError(f"Invalid action detected: {actions}. Cannot prepare node {attackers_node}.")
+                rewards[prepare_mask] -= 100.0  # Penalty for invalid prepare action
 
         # Collect
         collect_mask = actions == 6
@@ -329,7 +338,8 @@ class PoachersEnv(EnvironmentBase):
                 rewards[1] += self.map.x[attackers_node, 0]  # Node reward
                 rewards[0] -= self.map.x[attackers_node, 0]
             else:
-                raise ValueError(f"Invalid action detected: {actions}. Cannot collect node {attackers_node}.")
+                #raise ValueError(f"Invalid action detected: {actions}. Cannot collect node {attackers_node}.")
+                rewards[collect_mask] -= 100.0  # Penalty for invalid collect action
 
         # Check if all reward nodes are collected
         if self.nodes_collected[self.map.reward_nodes].all():

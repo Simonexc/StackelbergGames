@@ -1,11 +1,14 @@
+from abc import ABC, abstractmethod
 from enum import Enum
-from typing import NamedTuple
+from typing import NamedTuple, Type
 
 import torch
 import random
 
-from .flipit_geometric import FlipItEnv
-from .poachers import PoachersEnv
+from .base_env import EnvironmentBase
+from .base_map import EnvMapBase
+from .flipit_geometric import FlipItEnv, FlipItMap
+from .poachers import PoachersEnv, PoachersMap
 from config import Player
 
 
@@ -34,20 +37,45 @@ class PlayerActionTargetPair(NamedTuple):
     target_node: int
 
 
-class BeliefState:
-    def __init__(self, player: Player, env: FlipItEnv, device: torch.device, believed_node_owners: torch.Tensor | None = None) -> None:
-        self.believed_node_owners = torch.full((env.map.num_nodes,), Player.defender.value, dtype=torch.bool, device=device) if believed_node_owners is None else believed_node_owners
-        self.beliefs_history: list[tuple[Player, PlayerTargetPair] | None] = []
+class BeliefStateBase(ABC):
+    def __init__(self, player: Player, env: EnvironmentBase, device: torch.device) -> None:
         self.player = player
         self.env = env
         self.device = device
 
+    @abstractmethod
+    def update_belief(self, action: int) -> None:
+        """
+        Update the belief state based on the action taken.
+        """
+
+    @abstractmethod
+    def available_actions(self) -> list[int]:
+        """
+        Get a list of available actions for the player.
+        """
+
     @classmethod
-    def from_observation_history(cls, player: Player, env: FlipItEnv, observation_history: list[PlayerTargetPair | None], believed_node_owners: torch.Tensor | None = None) -> "BeliefState":
-        instance = cls(player, env, believed_node_owners)
-        for observation in observation_history:
-            if observation is not None:
-                instance.update_belief(observation)
+    @abstractmethod
+    def from_actions_history(cls, player: Player, env: EnvironmentBase, actions: list[int], device: str | torch.device) -> "BeliefStateBase":
+        """
+        Create a belief state from a history of actions.
+        """
+
+
+class FlipItBeliefState(BeliefStateBase):
+    def __init__(self, player: Player, env: FlipItEnv, device: torch.device, believed_node_owners: torch.Tensor | None = None) -> None:
+        super().__init__(player, env, device)
+
+        assert isinstance(env, FlipItEnv), "FlipitBeliefState can only be used with FlipItEnv."
+        self.believed_node_owners = torch.full((env.map.num_nodes,), Player.defender.value, dtype=torch.bool, device=device) if believed_node_owners is None else believed_node_owners
+        self.beliefs_history: list[tuple[Player, int] | None] = []
+
+    @classmethod
+    def from_actions_history(cls, player: Player, env: FlipItEnv, actions: list[int], device: str | torch.device, believed_node_owners: torch.Tensor | None = None) -> "BeliefState":
+        instance = cls(player, env, device, believed_node_owners)
+        for action in actions:
+            instance.update_belief(action)
         return instance
 
     def is_believed_reachable_for_defender(self, node: int) -> bool:
@@ -97,38 +125,36 @@ class BeliefState:
         else:
             raise ValueError(f"Invalid player: {self.player}.")
 
-    def nodes_reachable(self) -> list[int]:
+    def available_actions(self) -> list[int]:
         """
         Get a list of nodes that are reachable by the player.
 
         Returns:
             list[int]: A list of reachable nodes.
         """
-        return [node for node in range(self.env.map.num_nodes) if self.is_believed_reachable(node)]
+        node_ids = [node for node in range(self.env.map.num_nodes) if self.is_believed_reachable(node)]
+        return node_ids + [self.env.map.num_nodes + node for node in range(self.env.map.num_nodes)]  # flip and observe actions
 
-    def update_belief(self, target: PlayerTargetPair | None) -> None:
-        if target is None:
-            self.beliefs_history.append(None)
-            return
-        self.beliefs_history.append((Player(self.believed_node_owners[target.target_node]), target))
-        self.believed_node_owners[target.target_node] = target.player.value
+    def update_belief(self, action: int) -> None:
+        self.beliefs_history.append((Player(self.believed_node_owners[action % self.env.map.num_nodes]), action))
+        self.believed_node_owners[action % self.env.map.num_nodes] = action // self.env.map.num_nodes
 
-    def undo_belief(self) -> None:
-        if len(self.beliefs_history) <= 0:
-            raise RuntimeError("No belief to undo.")
-
-        last_belief = self.beliefs_history.pop()
-        if last_belief is None:
-            return
-        self.believed_node_owners[last_belief[1].target_node] = last_belief[0].value
+    # def undo_belief(self) -> None:
+    #     if len(self.beliefs_history) <= 0:
+    #         raise RuntimeError("No belief to undo.")
+    #
+    #     last_belief = self.beliefs_history.pop()
+    #     if last_belief is None:
+    #         return
+    #     self.believed_node_owners[last_belief[1].target_node] = last_belief[0].value
 
 
-class BeliefState2:
+class PoachersBeliefState(BeliefStateBase):
     def __init__(self, player: Player, env: PoachersEnv, device: torch.device) -> None:
+        super().__init__(player, env, device)
+
+        assert isinstance(env, PoachersEnv), "PoachersBeliefState can only be used with PoachersEnv."
         self.pos = env.position[player.value]
-        self.player = player
-        self.env = env
-        self.device = device
         self.prepared = env.nodes_prepared.clone()
         self.collected = env.nodes_collected.clone()
 
@@ -162,11 +188,20 @@ class BeliefState2:
         return actions
 
     @classmethod
-    def from_observation_actions(cls, player: Player, env: PoachersEnv, actions: list[int], device: str | torch.device) -> "BeliefState2":
+    def from_actions_history(cls, player: Player, env: PoachersEnv, actions: list[int], device: str | torch.device) -> "PoachersBeliefState":
         instance = cls(player, env, device)
         for action in actions:
             instance.update_belief(action)
         return instance
+
+
+def belief_state_class(env: EnvironmentBase | EnvMapBase) -> Type[BeliefStateBase]:
+    if isinstance(env, FlipItEnv) or isinstance(env, FlipItMap):
+        return FlipItBeliefState
+    elif isinstance(env, PoachersEnv) or isinstance(env, PoachersMap):
+        return PoachersBeliefState
+    else:
+        raise ValueError(f"Unsupported environment type: {type(env)}")
 
 
 # def generate_random_pure_strategy(player: Player, env: FlipItEnv) -> torch.Tensor:
@@ -191,7 +226,8 @@ class BeliefState2:
 #
 #     return torch.tensor(pure_strategy, dtype=torch.int32)
 
-def generate_random_pure_strategy(player: Player, env: FlipItEnv) -> torch.Tensor:
+
+def generate_random_pure_strategy(player: Player, env: EnvironmentBase) -> torch.Tensor:
     """
     Generate a random pure strategy for the FlipIt game.
 
@@ -204,10 +240,10 @@ def generate_random_pure_strategy(player: Player, env: FlipItEnv) -> torch.Tenso
     """
 
     pure_strategy: list[int] = []
-    belief_state = BeliefState(player, env, env.device)
+    belief_state = belief_state_class(env)(player, env, env.device)
     for step in range(env.num_steps):
-        target_node = random.choice(belief_state.nodes_reachable())
-        pure_strategy.append(target_node)
-        belief_state.update_belief(PlayerTargetPair(player=player, target_node=target_node))
+        action = random.choice(belief_state.available_actions())
+        pure_strategy.append(action)
+        belief_state.update_belief(action)
 
     return torch.tensor(pure_strategy, dtype=torch.int32)

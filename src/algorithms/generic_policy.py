@@ -13,7 +13,8 @@ from torchrl.envs import EnvBase
 from config import Player
 from .base import BaseAgent, BaseTrainableAgent
 from .generator import AgentGenerator
-from environments.flipit_utils import BeliefState
+from environments.flipit_utils import belief_state_class
+from environments.base_env import EnvironmentBase
 from environments.flipit_geometric import FlipItMap
 from environments.poachers import PoachersMap
 
@@ -229,8 +230,9 @@ class MultiAgentPolicy(BaseTrainableAgent):
 
 
 class MapLogicModuleBase(ABC):
-    def __init__(self, env_map: FlipItMap | PoachersMap, player_type: int, total_steps: int, device: torch.device | str):
-        self._env_map = env_map
+    def __init__(self, env: EnvironmentBase, player_type: int, total_steps: int, device: torch.device | str):
+        self._env = env
+        self._env_map = env.map
         self._player_type = player_type
         self._total_steps = total_steps
         self._device = device
@@ -250,27 +252,27 @@ class FlipItLogicModule(MapLogicModuleBase):
         costs = self._env_map.x[:, 1]
 
         # Use BeliefState to update belief from node_owners
-        belief = BeliefState(Player.attacker, type('DummyEnv', (), {'map': self._env_map})(), self._device)
+        belief = belief_state_class(self._env)(Player.attacker, self._env, self._device)
         belief.believed_node_owners = node_owners.clone()
-        reachable_nodes = belief.nodes_reachable()
-        if not reachable_nodes:
-            # fallback: pick any node
-            reachable_nodes = list(range(self._env_map.num_nodes))
+        actions = belief.available_actions()
 
         # For each reachable node, compute reward for flipping (if not owned)
         best_reward = 0
-        best_action_type = 1  # default to observe
-        best_target_node = reachable_nodes[0]
-        for node in reachable_nodes:
-            if not node_owners[node]:
-                reward = rewards[node].item() * (self._total_steps - current_step) + costs[node].item()
-                if reward > best_reward:
-                    best_reward = reward
-                    best_action_type = 0  # flip
-                    best_target_node = node
+        best_action = actions[0]
+        for action in actions:
+            if action < self._env_map.num_nodes:  # Flip action
+                if not node_owners[action]:
+                    reward = rewards[action].item() * (self._total_steps - current_step) + costs[action].item()
+                    if reward > best_reward:
+                        best_reward = reward
+                        best_action = action
+            else:
+                # Observe action - for greedy algorithm, any observe is the same
+                if best_reward <= 0:
+                    best_action = action
+                break
         # If no flip is better than observe (which is always 0), best_action_type stays 1
-        return torch.tensor(best_action_type * len(node_owners) + best_target_node, dtype=torch.int32,
-                              device=self._device)
+        return torch.tensor(best_action, dtype=torch.int32, device=self._device)
 
 
 class PoachersLogicModule(MapLogicModuleBase):

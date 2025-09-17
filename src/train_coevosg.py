@@ -9,7 +9,7 @@ from tqdm import tqdm
 import wandb
 from dotenv import dotenv_values
 
-from environments.flipit_geometric import FlipItMap, FlipItEnv
+from environments.poachers import PoachersEnv
 from algorithms.generic_policy import CombinedPolicy
 from algorithms.coevosg import CoevoSGAttackerAgent, CoevoSGDefenderAgent, StrategyBase
 from config import EnvConfig, CoevoSGConfig
@@ -37,6 +37,9 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     coevosg_config = CoevoSGConfig.from_dict(config)
 
     env_map, env = env_config_.create("cpu")
+    if isinstance(env, PoachersEnv):
+        env.freeze_start_point = True
+        env.reset()
 
     ctx = torch.multiprocessing.get_context('spawn')
 
@@ -63,6 +66,8 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
 
         num_turns = coevosg_config.generations // coevosg_config.gen_per_switch
         pbar = tqdm(total=num_turns)
+        # for a in attacker_agent.population:
+        #     print(a.pure_strategy)
         defender_agent.evaluate_population(attacker_agent.population)
         attacker_agent.evaluate_population(defender_agent.population)
         best_fitness = attacker_agent.best_population.fitness

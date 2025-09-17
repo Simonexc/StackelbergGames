@@ -19,9 +19,8 @@ from torchrl.data import Bounded
 from .base import BaseAgent
 from .generic_policy import CombinedPolicy
 from config import CoevoSGConfig, Player
-from environments.flipit_utils import generate_random_pure_strategy, BeliefState2
-from environments.flipit_geometric import FlipItEnv
-from environments.poachers import PoachersEnv
+from environments.flipit_utils import generate_random_pure_strategy, belief_state_class
+from environments.base_env import EnvironmentBase
 
 
 env_config = dotenv_values("../../.env")
@@ -67,7 +66,7 @@ class StrategyBase(nn.Module, ABC):
         """
 
     @abstractmethod
-    def evaluate(self, env: FlipItEnv, opponent_population: list["StrategyBase"], top_n: int | None = None) -> None:
+    def evaluate(self, env: EnvironmentBase, opponent_population: list["StrategyBase"], top_n: int | None = None) -> None:
         """
         Evaluates the strategy against the environment and updates its fitness.
         Should be implemented by subclasses.
@@ -110,7 +109,7 @@ class StrategyBase(nn.Module, ABC):
 
 
 class PureStrategy(StrategyBase):
-    def __init__(self, action_size: int, pure_strategy: torch.Tensor, env: PoachersEnv, player: Player) -> None:
+    def __init__(self, action_size: int, pure_strategy: torch.Tensor, env: EnvironmentBase, player: Player) -> None:
         super().__init__()
         self.action_size = action_size
         self.pure_strategy = pure_strategy
@@ -138,7 +137,7 @@ class PureStrategy(StrategyBase):
 
     def mutate(self) -> None:
         mutation_point = torch.randint(0, len(self.pure_strategy), torch.Size(())).item()
-        belief_state = BeliefState2.from_observation_actions(player=self.player, env=self.env, device=self.pure_strategy.device, actions=self.pure_strategy[:mutation_point].tolist())
+        belief_state = belief_state_class(self.env).from_actions_history(player=self.player, env=self.env, device=self.pure_strategy.device, actions=self.pure_strategy[:mutation_point].tolist())
         for step in range(mutation_point, len(self.pure_strategy)):
             actions = belief_state.available_actions()
             action = random.choice(actions)
@@ -173,7 +172,7 @@ class PureStrategy(StrategyBase):
         """ Pure strategies do not need simplification. """
         pass
 
-    def evaluate(self, env: FlipItEnv, opponent_population: list["StrategyBase"], top_n: int | None = None) -> None:
+    def evaluate(self, env: EnvironmentBase, opponent_population: list["StrategyBase"], top_n: int | None = None) -> None:
         if len(opponent_population) == 0:
             self.fitness = -float("inf")
             return
@@ -223,7 +222,7 @@ class PureStrategy(StrategyBase):
         }
 
     @classmethod
-    def from_simple_data(cls, data: dict, action_size: int, env: PoachersEnv, player: Player) -> "PureStrategy":
+    def from_simple_data(cls, data: dict, action_size: int, env: EnvironmentBase, player: Player) -> "PureStrategy":
         strategy = cls(action_size, torch.tensor(data["strategy"], dtype=torch.int32), env, player)
         strategy.fitness = data["fitness"]
         return strategy
@@ -385,7 +384,7 @@ class MixedStrategy(StrategyBase):
 
         self._update_sampler()
 
-    def evaluate(self, env: FlipItEnv, opponent_population: list["StrategyBase"], top_n: int | None = None) -> None:
+    def evaluate(self, env: EnvironmentBase, opponent_population: list["StrategyBase"], top_n: int | None = None) -> None:
         if len(opponent_population) == 0:
             self.fitness = -float('inf')  # Cannot evaluate
             return
@@ -441,7 +440,7 @@ class MixedStrategy(StrategyBase):
         }
 
     @classmethod
-    def from_simple_data(cls, data: dict, action_size: int, env: PoachersEnv, player: Player) -> "MixedStrategy":
+    def from_simple_data(cls, data: dict, action_size: int, env: EnvironmentBase, player: Player) -> "MixedStrategy":
         pure_strategies = [
             PureStrategy.from_simple_data(ps_data, action_size, env, player)
             for ps_data in data["strategies"]
@@ -460,7 +459,7 @@ class StrategyGenerator:
         return self.strategy_class(self.action_size, **kwargs)
 
 
-def strategy_from_simple_data(data: dict, action_size: int, env: PoachersEnv, player: Player) -> StrategyBase:
+def strategy_from_simple_data(data: dict, action_size: int, env: EnvironmentBase, player: Player) -> StrategyBase:
     if data["type"] == "pure":
         return PureStrategy.from_simple_data(data, action_size, env, player)
     elif data["type"] == "mixed":
@@ -497,7 +496,7 @@ class CoevoSGAgentBase(BaseAgent, ABC):
         device: torch.device | str,
         run_name: str,
         config: CoevoSGConfig,
-        env: FlipItEnv,
+        env: EnvironmentBase,
         pop_size: int = 200,
         agent_id: int | None = None,
         pool: multiprocessing.pool.Pool | None = None,
