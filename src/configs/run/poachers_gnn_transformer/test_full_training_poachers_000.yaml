@@ -29,7 +29,7 @@ max_grad_norm_defender: 0.6
 
 cls_name_backbone: BackboneTransformer
 embedding_cls_name_backbone: GNNBackbone
-embedding_size: 32
+embedding_size: 36
 hidden_size_backbone: 64
 hidden_size_head: 64
 d_model_backbone: 320
