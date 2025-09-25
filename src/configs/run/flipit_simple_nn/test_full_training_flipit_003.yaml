@@ -1,0 +1,42 @@
+player_turns_attacker: 10
+total_steps_per_turn_attacker: 300000
+epochs_per_batch_attacker: 14
+steps_per_batch_attacker: 2048
+sub_batch_size_attacker: 512
+
+clip_epsilon_attacker: 0.22
+gamma_attacker: 0.92
+lmbda_attacker: 0.94
+entropy_eps_attacker: 0.0008
+critic_coef_attacker:  0.075
+learning_rate_attacker: 0.003
+max_grad_norm_attacker: 0.68
+
+player_turns_defender: 10
+total_steps_per_turn_defender: 300000
+epochs_per_batch_defender: 14
+steps_per_batch_defender: 2048
+sub_batch_size_defender: 512
+
+clip_epsilon_defender: 0.22
+gamma_defender: 0.92
+lmbda_defender: 0.94
+entropy_eps_defender: 0.0008
+critic_coef_defender:  0.075
+learning_rate_defender: 0.003
+max_grad_norm_defender: 0.68
+
+cls_name_backbone: Backbone
+embedding_size: 64
+hidden_size_backbone: 64
+hidden_size_head: 100
+keys_backbone:
+  x:
+    - StepCountExtractor
+    - ObservedNodeOwnersLastExtractor
+    - LastActionExtractor
+
+num_nodes: 30
+num_steps: 30
+seed: 41
+env_name: flipit
