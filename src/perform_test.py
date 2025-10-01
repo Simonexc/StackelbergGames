@@ -323,7 +323,7 @@ if __name__ == "__main__":
         print_results=False,
     )
 
-    output_file = os.path.join(dot_env_config.get("RESULTS_PATH", "."), "stackelberg", f"test_{env_config.env_name}_{env_config.num_nodes}_{env_config.num_steps}_{env_config.seed}.json")
+    output_file = os.path.join(dot_env_config.get("RESULTS_PATH", "."), "stackelberg", f"test_{env_config.env_name}_{env_config.num_nodes}_{env_config.num_steps}_{env_config.seed}.yaml")
     print(output_file)
     with open(output_file, "w") as f:
         yaml.dump(results, f)
