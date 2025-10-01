@@ -1,6 +1,7 @@
 import argparse
 import multiprocessing
 import yaml
+import uuid
 from datetime import datetime
 
 import torch
@@ -25,7 +26,7 @@ https://arxiv.org/pdf/2306.01324
 """
 def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = None, config=None, log_wandb: bool = False):
     if not run_name:
-        run_name = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-full'
+        run_name = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-full-{uuid.uuid4().hex[:8]}'
     if config is None:
         wandb.init(
             entity=env_config["WANDB_ENTITY"],

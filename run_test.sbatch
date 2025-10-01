@@ -13,7 +13,7 @@
 #SBATCH --mail-user=01153165@pw.edu.pl
 #SBATCH --account=mandziuk-lab
 
-date; hostname; pwd
+date; hostname;
 
 export TMPDIR=/mnt/evafs/scratch/shared/strochimiak/tmp/$SLURM_JOB_ID
 mkdir -p $TMPDIR
