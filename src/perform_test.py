@@ -31,15 +31,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--nn_run",
+        "--nn_id",
         type=str,
     )
     parser.add_argument(
-        "--gnn_run",
+        "--gnn_id",
         type=str,
     )
     parser.add_argument(
-        "--gnn_transformer_run",
+        "--gnn_transformer_id",
         type=str,
     )
     parser.add_argument(
@@ -48,9 +48,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    nn_model_path = os.path.join(dot_env_config.get("MODELS_PATH", "."), "saved_models", args.nn_run)
-    gnn_model_path = os.path.join(dot_env_config.get("MODELS_PATH", "."), "saved_models", args.gnn_run)
-    gnn_transformer_model_path = os.path.join(dot_env_config.get("MODELS_PATH", "."), "saved_models", args.gnn_transformer_run)
     coevosg_model_path = os.path.join(dot_env_config.get("MODELS_PATH", "."), "saved_models", args.coevosg_run)
 
     # Get configs from wandb runs and save as YAML files in temp directory
@@ -58,20 +55,26 @@ if __name__ == "__main__":
     wandb_api = wandb.Api()
 
     # Fetch and save NN model config
-    nn_run = wandb_api.run(f"{dot_env_config.get('WANDB_ENTITY')}/{dot_env_config.get('WANDB_PROJECT')}/{args.nn_run}")
-    nn_model_config_path = os.path.join(temp_dir, f"{args.nn_run}_config.yaml")
+    nn_run = wandb_api.run(f"{dot_env_config.get('WANDB_ENTITY')}/{dot_env_config.get('WANDB_PROJECT')}/{args.nn_id}")
+    nn_model_path = os.path.join(dot_env_config.get("MODELS_PATH", "."), "saved_models", nn_run.name)
+    print(nn_model_path)
+    nn_model_config_path = os.path.join(temp_dir, f"{args.nn_id}_config.yaml")
     with open(nn_model_config_path, "w") as f:
         yaml.dump(dict(nn_run.config), f)
 
     # Fetch and save GNN model config
-    gnn_run = wandb_api.run(f"{dot_env_config.get('WANDB_ENTITY')}/{dot_env_config.get('WANDB_PROJECT')}/{args.gnn_run}")
-    gnn_model_config_path = os.path.join(temp_dir, f"{args.gnn_run}_config.yaml")
+    gnn_run = wandb_api.run(f"{dot_env_config.get('WANDB_ENTITY')}/{dot_env_config.get('WANDB_PROJECT')}/{args.gnn_id}")
+    gnn_model_path = os.path.join(dot_env_config.get("MODELS_PATH", "."), "saved_models", gnn_run.name)
+    print(gnn_model_path)
+    gnn_model_config_path = os.path.join(temp_dir, f"{args.gnn_id}_config.yaml")
     with open(gnn_model_config_path, "w") as f:
         yaml.dump(dict(gnn_run.config), f)
 
     # Fetch and save GNN Transformer model config
-    gnn_transformer_run = wandb_api.run(f"{dot_env_config.get('WANDB_ENTITY')}/{dot_env_config.get('WANDB_PROJECT')}/{args.gnn_transformer_run}")
-    gnn_transformer_model_config_path = os.path.join(temp_dir, f"{args.gnn_transformer_run}_config.yaml")
+    gnn_transformer_run = wandb_api.run(f"{dot_env_config.get('WANDB_ENTITY')}/{dot_env_config.get('WANDB_PROJECT')}/{args.gnn_transformer_id}")
+    gnn_transformer_model_path = os.path.join(dot_env_config.get("MODELS_PATH", "."), "saved_models", gnn_transformer_run.name)
+    print(gnn_transformer_model_path)
+    gnn_transformer_model_config_path = os.path.join(temp_dir, f"{args.gnn_transformer_id}_config.yaml")
     with open(gnn_transformer_model_config_path, "w") as f:
         yaml.dump(dict(gnn_transformer_run.config), f)
 
@@ -104,7 +107,7 @@ if __name__ == "__main__":
         agent_config=nn_agent_config,
         backbone_config=nn_backbone_config,
         head_config=nn_head_config,
-        run_name=args.nn_run,
+        run_name="test",
         add_logs=False,  # No logs during testing
     )
     nn_defender_agent.eval()
@@ -164,7 +167,7 @@ if __name__ == "__main__":
         agent_config=gnn_agent_config,
         backbone_config=gnn_backbone_config,
         head_config=gnn_head_config,
-        run_name=args.gnn_run,
+        run_name="test",
         add_logs=False,  # No logs during testing
     )
     gnn_defender_agent.eval()
@@ -224,7 +227,7 @@ if __name__ == "__main__":
         agent_config=gnn_transformer_agent_config,
         backbone_config=gnn_transformer_backbone_config,
         head_config=gnn_transformer_head_config,
-        run_name=args.gnn_transformer_run,
+        run_name="test",
         add_logs=False,  # No logs during testing
     )
     gnn_transformer_defender_agent.eval()
@@ -302,7 +305,7 @@ if __name__ == "__main__":
         run_name="test",
         map_logic=logic_module,
     )
-
+    print("processing")
     results = compare_agent_pairs(
         [
             (nn_defender_agent, nn_attacker_agent, "nn"),
@@ -319,5 +322,6 @@ if __name__ == "__main__":
     )
 
     output_file = os.path.join(dot_env_config.get("RESULTS_PATH", "."), "stackelberg", f"test_{env_config.env_name}_{env_config.num_nodes}_{env_config.num_steps}_{env_config.seed}.json")
+    print(output_file)
     with open(output_file, "w") as f:
         yaml.dump(results, f)
