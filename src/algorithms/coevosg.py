@@ -204,6 +204,7 @@ class PureStrategy(StrategyBase):
 
     def save(self, run_name: str, player_name: str) -> None:
         save_path = self.get_path_name(run_name, player_name)
+        print(f"Saving pure strategy to {save_path}")
         torch.save({
             "pure_strategy": self.pure_strategy,
             "fitness": self.fitness,
@@ -416,6 +417,7 @@ class MixedStrategy(StrategyBase):
 
     def save(self, run_name: str, player_name: str) -> None:
         save_path = self.get_path_name(run_name, player_name)
+        print(f"Saving mixed strategy to {save_path}")
         torch.save({
             "pure_strategies": torch.stack([strategy.pure_strategy for strategy in self.pure_strategies], dim=0),
             "probabilities": torch.tensor(self.probabilities),
