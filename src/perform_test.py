@@ -49,6 +49,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     coevosg_model_path = os.path.join(dot_env_config.get("MODELS_PATH", "."), "saved_models", args.coevosg_run)
+    if not os.path.exists(coevosg_model_path):
+        coevosg_model_path = os.path.join(".", "saved_models", args.coevosg_run)
 
     # Get configs from wandb runs and save as YAML files in temp directory
     temp_dir = tempfile.mkdtemp()

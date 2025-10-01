@@ -23,7 +23,7 @@ from environments.flipit_utils import generate_random_pure_strategy, belief_stat
 from environments.base_env import EnvironmentBase
 
 
-env_config = dotenv_values("../../.env")
+env_config = dotenv_values("../.env")
 
 
 class StrategyBase(nn.Module, ABC):
