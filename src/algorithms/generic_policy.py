@@ -246,7 +246,7 @@ class MapLogicModuleBase(ABC):
 
 class FlipItLogicModule(MapLogicModuleBase):
     def get_action(self, tensordict: TensorDictBase) -> torch.Tensor:
-        node_owners = tensordict["node_owners"]
+        node_owners = tensordict["node_owners_fi"]
         current_step = tensordict["step_count"].item()
         rewards = self._env_map.x[:, 0]
         costs = self._env_map.x[:, 1]
