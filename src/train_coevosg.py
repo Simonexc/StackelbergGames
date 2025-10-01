@@ -68,6 +68,8 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
         pbar = tqdm(total=num_turns)
         # for a in attacker_agent.population:
         #     print(a.pure_strategy)
+        defender_agent.save()
+        attacker_agent.save()
         defender_agent.evaluate_population(attacker_agent.population)
         attacker_agent.evaluate_population(defender_agent.population)
         best_fitness = attacker_agent.best_population.fitness
