@@ -134,24 +134,6 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
             # scheduler_steps=training_config.total_steps_per_turn // training_config.steps_per_batch + 5,
         )
 
-    # Wrap models with DataParallel if multiple GPUs are specified
-    if gpu_ids is not None and len(gpu_ids) > 1:
-        print(f"Using DataParallel with GPUs: {gpu_ids}")
-        # Wrap the trainable agent's model with DataParallel
-        if player == 0:
-            # Wrap defender agent's neural network components
-            if hasattr(defender_agent, 'agent') and defender_agent.agent is not None:
-                defender_agent.agent = torch.nn.DataParallel(defender_agent.agent, device_ids=gpu_ids)
-        else:
-            # Wrap attacker agent's neural network components
-            if hasattr(attacker_agent, 'agent') and attacker_agent.agent is not None:
-                pass
-                #attacker_agent.agent.module[0] = torch.nn.DataParallel(attacker_agent.agent.module[0], device_ids=gpu_ids)
-                #attacker_agent.agent.module[1] = torch.nn.DataParallel(attacker_agent.agent.module[1],
-                #                                                       device_ids=gpu_ids)
-                #attacker_agent.agent.module[2] = torch.nn.DataParallel(attacker_agent.agent.module[2],
-                #                                                       device_ids=gpu_ids)
-
     combined_policy = CombinedPolicy(
         defender_agent,
         attacker_agent,

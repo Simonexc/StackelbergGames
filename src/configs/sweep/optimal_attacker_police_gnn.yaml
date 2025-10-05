@@ -1,0 +1,110 @@
+name: single_attacker_police
+method: bayes
+metric:
+  goal: maximize
+  name: eval/reward_attacker_mean
+parameters:
+  player_turns_attacker:
+    value: 1
+  total_steps_per_turn_attacker:
+    value: 300000
+  epochs_per_batch_attacker:
+    distribution: q_uniform
+    min: 2
+    max: 20
+  steps_per_batch_attacker:
+    value: 2048
+  sub_batch_size_attacker:
+    value: 512
+
+  learning_rate_attacker:
+    distribution: log_uniform_values
+    min: 0.0000001
+    max: 0.01
+  max_grad_norm_attacker:
+    distribution: uniform
+    min: 0.0
+    max: 1.0
+
+  clip_epsilon_attacker:
+    distribution: uniform
+    min: 0.05
+    max: 0.5
+  gamma_attacker:
+    distribution: log_uniform_values
+    min: 0.9
+    max: 0.9999
+  lmbda_attacker:
+    distribution: uniform
+    min: 0.9
+    max: 0.99
+  entropy_eps_attacker:
+    distribution: log_uniform_values
+    min: 0.00001
+    max: 0.1
+  critic_coef_attacker:
+    distribution: uniform
+    min: 0.0
+    max: 1.0
+
+  cls_name_backbone_attacker:
+    value: GNNBackbone
+  embedding_size_attacker:
+    distribution: q_log_uniform_values
+    min: 16
+    max: 128
+  hidden_size_backbone_attacker:
+    distribution: q_log_uniform_values
+    min: 16
+    max: 128
+  hidden_size_head_attacker:
+    distribution: q_log_uniform_values
+    min: 16
+    max: 128
+  keys_backbone_attacker:
+    value:
+      x:
+        - StepCountExtractor
+        - LastActionExtractor
+        - CanAttackLastExtractor
+      graph_x:
+        - GraphXExtractor
+      position:
+        - AllPositionIntLastExtractor
+      available_moves:
+        - AllAvailableMovesIntExtractor
+      graph_edge_index:
+        - GraphEdgeIndexExtractor
+
+  cls_name_backbone_defender:
+    value: GNNBackbone
+  embedding_size_defender:
+    value: 32
+  hidden_size_backbone_defender:
+    value: 32
+  hidden_size_head_defender:
+    value: 32
+  keys_backbone_defender:
+    value:
+      x:
+        - StepCountExtractor
+        - LastActionExtractor
+      graph_x:
+        - GraphXExtractor
+      position:
+        - PositionIntLastExtractor
+      available_moves:
+        - AvailableMovesIntExtractor
+      graph_edge_index:
+        - GraphEdgeIndexExtractor
+  num_heads_head_defender:
+    value: 2
+
+  num_nodes:
+    value: 30
+  num_steps:
+    value: 50
+  seed:
+    value: 41
+  env_name:
+    value: police
