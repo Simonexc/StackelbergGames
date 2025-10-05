@@ -115,6 +115,7 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
             run_name=run_name,
             num_defenders=env.num_defenders,
             num_attackers=env.num_attackers,
+            gpus=gpu_ids,
         )
         attacker_agent = TrainableNNAgentPolicy(
             player_type=1,
@@ -131,6 +132,7 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
             agent_config=agent_config_attacker,
             num_defenders=env.num_defenders,
             num_attackers=env.num_attackers,
+            gpus=gpu_ids,
             # scheduler_steps=training_config.total_steps_per_turn // training_config.steps_per_batch + 5,
         )
 
