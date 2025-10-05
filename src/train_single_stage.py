@@ -145,7 +145,11 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
         else:
             # Wrap attacker agent's neural network components
             if hasattr(attacker_agent, 'agent') and attacker_agent.agent is not None:
-                attacker_agent.agent = torch.nn.DataParallel(attacker_agent.agent, device_ids=gpu_ids)
+                attacker_agent.agent.module[0] = torch.nn.DataParallel(attacker_agent.agent.module[0], device_ids=gpu_ids)
+                attacker_agent.agent.module[1] = torch.nn.DataParallel(attacker_agent.agent.module[1],
+                                                                       device_ids=gpu_ids)
+                attacker_agent.agent.module[2] = torch.nn.DataParallel(attacker_agent.agent.module[2],
+                                                                       device_ids=gpu_ids)
 
     combined_policy = CombinedPolicy(
         defender_agent,
