@@ -35,10 +35,9 @@ class BackboneBase(nn.Module, ABC):
         self.config = config
         self.device = device
 
-    @staticmethod
-    def to_module(self) -> TensorDictModule:
+    def to_module(self, gpus) -> TensorDictModule:
         return TensorDictModule(
-            self, in_keys=self.extractor.in_keys, out_keys=["embedding"]
+            torch.nn.DataParallel(self, device_ids=gpus), in_keys=self.extractor.in_keys, out_keys=["embedding"]
         )
 
     @abstractmethod
@@ -320,11 +319,10 @@ class ActorHead(nn.Module):
         self.player_start_id = player_start_id
         self.device = device
 
-    @staticmethod
-    def to_module(self) -> ProbabilisticActor:
+    def to_module(self, gpus) -> ProbabilisticActor:
         return ProbabilisticActor(
             TensorDictModule(
-                self, in_keys=["embedding", "actions_mask"], out_keys=["logits"]
+                torch.nn.DataParallel(self, device_ids=gpus), in_keys=["embedding", "actions_mask"], out_keys=["logits"]
             ),
             spec=self.action_spec,
             in_keys=["logits"],
@@ -358,10 +356,9 @@ class ValueHead(nn.Module):
             nn.Linear(hidden_size, 1),
         )
 
-    @staticmethod
-    def to_module(self) -> ValueOperator:
+    def to_module(self, gpus) -> ValueOperator:
         return ValueOperator(
-            module=self, in_keys=["embedding"]
+            module=torch.nn.DataParallel(self, device_ids=gpus), in_keys=["embedding"]
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -407,32 +404,32 @@ class NNAgentPolicy(BaseAgent):
             dtype=torch.int32,
         )
 
-        backbone = torch.nn.DataParallel(self._get_backbone_class(backbone_config.cls_name)(
+        backbone = self._get_backbone_class(backbone_config.cls_name)(
             config=backbone_config,
             extractor=extractor,
             embedding_size=agent_config.embedding_size,
             max_sequence_size=max_sequence_size,
             device=self._device,
-        ), device_ids=gpus)#.to(self._device)
+        ).to(self._device)
 
-        actor_head = torch.nn.DataParallel(ActorHead(
+        actor_head = ActorHead(
             embedding_size=agent_config.embedding_size,
             player_start_id=0 if player_type == 0 else num_defenders,
             action_spec=action_spec,
             hidden_size=head_config.hidden_size,
             device=self._device,
             num_heads=head_config.num_heads,
-        ), device_ids=gpus)#.to(self._device)
-        value_head = torch.nn.DataParallel(ValueHead(
+        ).to(self._device)
+        value_head = ValueHead(
             embedding_size=agent_config.embedding_size,
             hidden_size=head_config.hidden_size,
             device=self._device,
-        ), device_ids=gpus)#.to(self._device)
+        ).to(self._device)
 
         self.agent = ActorValueOperator(
-            BackboneBase.to_module(backbone),
-            ActorHead.to_module(actor_head),
-            ValueHead.to_module(value_head),
+            backbone.to_module(gpus),
+            actor_head.to_module(gpus),
+            value_head.to_module(gpus),
         )
 
     @staticmethod
