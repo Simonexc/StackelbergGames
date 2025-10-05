@@ -19,6 +19,8 @@ class BaseAgent(nn.Module, ABC):
         player_type: int,
         device: torch.device | str,
         run_name: str,
+        num_defenders: int,
+        num_attackers: int,
         agent_id: int | None = None,
     ) -> None:
         super().__init__()
@@ -27,6 +29,8 @@ class BaseAgent(nn.Module, ABC):
         self.player_name = Player(player_type).name
         self.run_name = run_name
         self.agent_id = agent_id
+        self.num_defenders = num_defenders
+        self.num_attackers = num_attackers
 
         self.num_steps: int = 0
         self.num_epochs: int = 0

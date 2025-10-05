@@ -10,6 +10,7 @@ import wandb
 from dotenv import dotenv_values
 
 from environments.poachers import PoachersEnv
+from environments.police import PoliceEnv
 from algorithms.generic_policy import CombinedPolicy
 from algorithms.coevosg import CoevoSGAttackerAgent, CoevoSGDefenderAgent, StrategyBase
 from config import EnvConfig, CoevoSGConfig
@@ -37,7 +38,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     coevosg_config = CoevoSGConfig.from_dict(config)
 
     env_map, env = env_config_.create("cpu")
-    if isinstance(env, PoachersEnv):
+    if isinstance(env, PoachersEnv) or isinstance(env, PoliceEnv):
         env.freeze_start_point = True
         env.reset()
 

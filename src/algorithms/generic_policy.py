@@ -15,16 +15,13 @@ from .base import BaseAgent, BaseTrainableAgent
 from .generator import AgentGenerator
 from environments.flipit_utils import belief_state_class
 from environments.base_env import EnvironmentBase
-from environments.flipit_geometric import FlipItMap
-from environments.poachers import PoachersMap
 
 
 def _tensordict_update_from_action(action: torch.Tensor, embedding_size: int, action_size: int, device: torch.device | str) -> dict[str, torch.Tensor]:
-    logits = torch.zeros(action_size, dtype=torch.float32, device=device)
-    logits[action] = 1.0
-    sample_log_prob = torch.zeros(torch.Size(()), dtype=torch.float32, device=device)
+    logits = torch.zeros((*action.shape, action_size), dtype=torch.float32, device=device)
+    logits[torch.arange(0, action.shape[-1]), action] = 1.0
+    sample_log_prob = torch.zeros_like(action, dtype=torch.float32, device=device)
     embedding = torch.zeros(embedding_size, dtype=torch.float32, device=device)
-
     return {
         "action": action,
         "logits": logits,
@@ -41,11 +38,15 @@ class RandomAgent(BaseAgent):
         player_type: int,
         device: torch.device | str,
         run_name: str,
+        num_defenders: int,
+        num_attackers: int,
         agent_id: int | None = None,
     ) -> None:
-        super().__init__(player_type, device, run_name, agent_id)
+        super().__init__(player_type, device, run_name, num_defenders, num_attackers, agent_id)
         self.embedding_size = embedding_size
         self.action_size = action_size
+        assert self.player_type == 1, "RandomAgent is only implemented for attackers."
+        assert self.num_attackers == 1, "RandomAgent is only implemented for single attacker."
 
     def save(self) -> None:
         # RandomAgent does not save its state
@@ -56,10 +57,9 @@ class RandomAgent(BaseAgent):
         pass
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
-        action_mask = tensordict["actions_mask"][..., self.player_type, :]
+        action_mask = tensordict["actions_mask"][..., self.num_defenders, :]
         available_actions = action_mask.nonzero(as_tuple=False).squeeze(-1)
-        action = available_actions[torch.randint(0, len(available_actions), torch.Size(()), dtype=torch.int32).item()]
-
+        action = available_actions[torch.randint(0, len(available_actions), torch.Size((self.num_defenders if self.player_type == 0 else self.num_attackers,)), dtype=torch.int32).item()].unsqueeze(-1)
         tensordict.update(_tensordict_update_from_action(action, self.embedding_size, self.action_size, self._device))
         return tensordict
 
@@ -108,10 +108,11 @@ class CombinedPolicy(nn.Module):
                 defender_embedding = torch.cat([defender_embedding, torch.zeros_like(attacker_embedding[..., defender_embedding.shape[-1]:])], dim=-1)
             else:
                 attacker_embedding = torch.cat([attacker_embedding, torch.zeros_like(defender_embedding[..., attacker_embedding.shape[-1]:])], dim=-1)
+
         attacker_output.update({
-            "action": torch.stack([defender_output["action"].clone(), attacker_output["action"]], dim=-1),
-            "logits": torch.stack([defender_output["logits"].clone(), attacker_output["logits"]], dim=-1),
-            "sample_log_prob": torch.stack([defender_output["sample_log_prob"].clone(), attacker_output["sample_log_prob"]], dim=-1),
+            "action": torch.cat([defender_output["action"].clone(), attacker_output["action"]], dim=-1),
+            "logits": torch.cat([defender_output["logits"].clone(), attacker_output["logits"]], dim=-2),
+            "sample_log_prob": torch.cat([defender_output["sample_log_prob"].clone(), attacker_output["sample_log_prob"]], dim=-1),
             "embedding": torch.stack([defender_embedding, attacker_embedding], dim=-1),
         })
         del defender_output
@@ -174,18 +175,24 @@ class MultiAgentPolicy(BaseTrainableAgent):
         run_name: str,
         policy_generator: AgentGenerator,
         embedding_size: int,
+        num_defenders: int,
+        num_attackers: int,
     ) -> None:
         super().__init__(
             player_type=player_type,
             device=device,
             run_name=run_name,
             agent_id=None,  # MultiAgentPolicy does not have an agent_id
+            num_attackers=num_attackers,
+            num_defenders=num_defenders,
         )
         self.policy_generator = policy_generator
         self.policies: list[BaseAgent] = [RandomAgent(
             action_size=action_size,
             embedding_size=embedding_size,
             player_type=self.player_type,
+            num_defenders=num_defenders,
+            num_attackers=num_attackers,
             device=self._device,
             run_name=self.run_name,
             agent_id=0,

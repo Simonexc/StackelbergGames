@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Type
 
 import torch
-from torchrl.envs import EnvBase
+from environments.base_env import EnvironmentBase
 
 from environments.flipit_geometric import FlipItEnv
 
@@ -10,11 +10,11 @@ from environments.flipit_geometric import FlipItEnv
 class TensorDictKeyExtractorBase(ABC):
     KEY: str
 
-    def __init__(self, player_type: int, env: EnvBase) -> None:
+    def __init__(self, player_type: int, env: EnvironmentBase) -> None:
         self._player_type = player_type
         self._env = env
 
-        assert self.KEY in self._env.observation_spec, f"Key {self.KEY} not found in observation spec."
+        # assert self.KEY in self._env.observation_spec, f"Key {self.KEY} not found in observation spec."
 
     @property
     def expected_size(self) -> int:
@@ -163,13 +163,16 @@ class LastActionExtractor(TensorDictKeyExtractorBase):
 
     @property
     def expected_size(self) -> int:
-        return self._env.action_size + 1  # +1 for the "no action" case
+        num = self._env.num_defenders if self._player_type == 0 else self._env.num_attackers
+        return (self._env.action_size + 1) * num  # +1 for the "no action" case
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
         # One-Hot encode actions
-        actions_seq = (value[..., self._player_type, -1] + 1).long()  # Shift actions to start from 0
-        actions_seq_one_hot = torch.nn.functional.one_hot(actions_seq, num_classes=self.expected_size).float()
-
+        if self._player_type == 0:
+            actions_seq = (value[..., :self._env.num_defenders, -1] + 1).long()  # Shift actions to start from 0
+        else:
+            actions_seq = (value[..., self._env.num_defenders:, -1] + 1).long()  # Shift actions to start from 0
+        actions_seq_one_hot = torch.nn.functional.one_hot(actions_seq, num_classes=self._env.action_size + 1).reshape((*actions_seq.shape[:-1], -1)).float()
         return actions_seq_one_hot
 
 
@@ -178,14 +181,18 @@ class ActionsExtractor(TensorDictKeyExtractorBase):
 
     @property
     def expected_size(self) -> int:
-        return self._env.action_size + 1  # +1 for the "no action" case
+        num = self._env.num_defenders if self._player_type == 0 else self._env.num_attackers
+        return (self._env.action_size + 1) * num  # +1 for the "no action" case
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
         # One-Hot encode actions
-        actions_seq = (value[..., self._player_type, :] + 1).long()  # Shift actions to start from 0
-        actions_seq_one_hot = torch.nn.functional.one_hot(actions_seq, num_classes=self.expected_size).float()
+        if self._player_type == 0:
+            actions_seq = (value[..., :self._env.num_defenders, :] + 1).long()  # Shift actions to start from 0
+        else:
+            actions_seq = (value[..., self._env.num_defenders:, :] + 1).long()  # Shift actions to start from 0
+        actions_seq_one_hot = torch.nn.functional.one_hot(actions_seq.transpose(-1, -2), num_classes=self._env.action_size + 1)
 
-        return actions_seq_one_hot
+        return actions_seq_one_hot.reshape((*actions_seq.shape[:-2], actions_seq.shape[-1], -1)).float()
 
 
 class PositionLastExtractor(TensorDictKeyExtractorBase):
@@ -193,14 +200,17 @@ class PositionLastExtractor(TensorDictKeyExtractorBase):
 
     @property
     def expected_size(self) -> int:
-        return self._env.map.num_nodes + 1
+        num = self._env.num_defenders if self._player_type == 0 else self._env.num_attackers
+        return (self._env.map.num_nodes + 1) * num
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
         # One-Hot encode position
-        position_seq = (value[..., self._player_type, -1] + 1).long()  # Shift positions to start from 0
-        position_seq = torch.nn.functional.one_hot(position_seq, num_classes=self.expected_size).float()
-
-        return position_seq
+        if self._player_type == 0:
+            position_seq = (value[..., :self._env.num_defenders, -1] + 1).long()  # Shift actions to start from 0
+        else:
+            position_seq = (value[..., self._env.num_defenders:, -1] + 1).long()  # Shift actions to start from 0
+        position_seq_one_hot = torch.nn.functional.one_hot(position_seq, num_classes=self._env.map.num_nodes + 1).reshape((*position_seq.shape[:-1], -1)).float()
+        return position_seq_one_hot
 
 
 class PositionIntLastExtractor(TensorDictKeyExtractorBase):
@@ -208,10 +218,13 @@ class PositionIntLastExtractor(TensorDictKeyExtractorBase):
 
     @property
     def expected_size(self) -> int:
-        return 1
+        num = self._env.num_defenders if self._player_type == 0 else self._env.num_attackers
+        return num
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
-        return value[..., self._player_type, -1].unsqueeze(-1)
+        if self._player_type == 0:
+            return value[..., :self._env.num_defenders, -1]
+        return value[..., self._env.num_defenders:, -1]
 
 
 class PositionIntSeqExtractor(TensorDictKeyExtractorBase):
@@ -219,10 +232,13 @@ class PositionIntSeqExtractor(TensorDictKeyExtractorBase):
 
     @property
     def expected_size(self) -> int:
-        return 1
+        num = self._env.num_defenders if self._player_type == 0 else self._env.num_attackers
+        return num
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
-        return value[..., self._player_type, :].unsqueeze(-1)
+        if self._player_type == 0:
+            return value[..., :self._env.num_defenders, :].transpose(-1, -2)
+        return value[..., self._env.num_defenders:, :].transpose(-1, -2)
 
 
 class GraphEdgeIndexExtractor(TensorDictKeyExtractorBase):
@@ -254,14 +270,19 @@ class AvailableMovesLastExtractor(TensorDictKeyExtractorBase):
 
     @property
     def expected_size(self) -> int:
-        return (self._env.map.num_nodes + 1) * 4
+        num = self._env.num_defenders if self._player_type == 0 else self._env.num_attackers
+        return (self._env.map.num_nodes + 1) * 4 * num
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
         # One-Hot encode position
-        available_moves = (value[..., self._player_type, -1, :] + 1).long()  # Shift positions to start from 0
-        available_moves = torch.nn.functional.one_hot(available_moves, num_classes=self._env.map.num_nodes + 1).float()
+        if self._player_type == 0:
+            available_moves = (value[..., :self._env.num_defenders, -1, :] + 1).long()  # Shift positions to start from 0
+        else:
+            available_moves = (value[..., self._env.num_defenders:, -1, :] + 1).long()  # Shift positions to start from 0
 
-        return available_moves.view(*available_moves.shape[:-2], self.expected_size)  # Flatten to (batch_size, num_nodes * 4)
+        # Flatten to (batch_size, (num_nodes+1) * 4 * num)
+        available_moves_one_hot = torch.nn.functional.one_hot(available_moves, num_classes=self._env.map.num_nodes + 1).reshape(*available_moves.shape[:-2], -1).float()
+        return available_moves_one_hot
 
 
 class AvailableMovesIntExtractor(TensorDictKeyExtractorBase):
@@ -269,10 +290,16 @@ class AvailableMovesIntExtractor(TensorDictKeyExtractorBase):
 
     @property
     def expected_size(self) -> int:
-        return 4
+        num = self._env.num_defenders if self._player_type == 0 else self._env.num_attackers
+        return 4 * num
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
-        return value[..., self._player_type, -1, :]
+        if self._player_type == 0:
+            available_moves = value[..., :self._env.num_defenders, -1, :]
+        else:
+            available_moves = value[..., self._env.num_defenders:, -1, :]
+
+        return available_moves.reshape(*value.shape[:-3], -1)
 
 
 class AvailableMovesIntSeqExtractor(TensorDictKeyExtractorBase):
@@ -280,12 +307,16 @@ class AvailableMovesIntSeqExtractor(TensorDictKeyExtractorBase):
 
     @property
     def expected_size(self) -> int:
-        return 4
+        num = self._env.num_defenders if self._player_type == 0 else self._env.num_attackers
+        return 4 * num
 
     def process(self, value: torch.Tensor) -> torch.Tensor:
-        # Extract the last available moves
-        available_moves = value[..., self._player_type, :, :]
-        return available_moves
+        if self._player_type == 0:
+            available_moves = value[..., :self._env.num_defenders, :, :]
+        else:
+            available_moves = value[..., self._env.num_defenders:, :, :]
+
+        return available_moves.transpose(-2, -3).reshape(*value.shape[:-3], value.shape[-2], -1)
 
 
 class NodeRewardInfoLastExtractor(TensorDictKeyExtractorBase):
@@ -300,6 +331,62 @@ class NodeRewardInfoLastExtractor(TensorDictKeyExtractorBase):
         node_reward_info = value[..., self._player_type, -1, :].float()
 
         return node_reward_info
+
+
+class TargetsAttackedLastExtractor(TensorDictKeyExtractorBase):
+    KEY = "targets_attacked_obs"
+
+    @property
+    def expected_size(self) -> int:
+        return self._env.map.num_nodes
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        # Extract the last targets attacked
+        targets_attacked = value[..., self._player_type, -1, :].float()
+
+        return targets_attacked
+
+
+class CheckResultsLastExtractor(TensorDictKeyExtractorBase):
+    KEY = "check_results"
+
+    @property
+    def expected_size(self) -> int:
+        return self._env.map.num_nodes
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        # Extract the last check results
+        check_results = value[..., -1, :].float()
+
+        return check_results
+
+
+class CanAttackLastExtractor(TensorDictKeyExtractorBase):
+    KEY = "can_attack_obs"
+
+    @property
+    def expected_size(self) -> int:
+        return 1
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        # Extract the last can_attack
+        can_attack = value[..., -1].unsqueeze(-1).float()
+
+        return can_attack
+
+
+class CanAttackSeqExtractor(TensorDictKeyExtractorBase):
+    KEY = "can_attack_obs"
+
+    @property
+    def expected_size(self) -> int:
+        return 1
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        # Extract sequence of can_attack
+        can_attack = value.float()
+
+        return can_attack.unsqueeze(-1)
 
 
 class GraphXExtractor(TensorDictKeyExtractorBase):

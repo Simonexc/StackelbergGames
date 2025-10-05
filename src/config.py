@@ -140,3 +140,4 @@ class BackboneConfig(FromDictMixin):
 @dataclass
 class HeadConfig(FromDictMixin):
     hidden_size: int = 64
+    num_heads: int = 1  # Number of actor heads (for multi-agent support)

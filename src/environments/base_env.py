@@ -21,6 +21,8 @@ class EnvironmentBase(EnvBase, ABC):
         env_map: EnvMapBase,
         device: torch.device | str | None = None,
         batch_size: torch.Size | None = None,
+        num_defenders: int = 1,
+        num_attackers: int = 1,
     ) -> None:
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -33,6 +35,8 @@ class EnvironmentBase(EnvBase, ABC):
         self.map = env_map.to(device)
         self.num_steps = config.num_steps
         self.config = config
+        self.num_defenders = num_defenders
+        self.num_attackers = num_attackers
         self._generator = torch.Generator(device=device)
 
         super().__init__(device=device, batch_size=batch_size)
@@ -132,17 +136,18 @@ class EnvironmentBase(EnvBase, ABC):
                 "actions_seq": Bounded(
                     low=-1,  # -1 means unobserved
                     high=self.action_size - 1,
-                    shape=torch.Size((*self.batch_size, 2, self.num_steps + 1)),
+                    shape=torch.Size((*self.batch_size, self.num_defenders + self.num_attackers, self.num_steps + 1)),
                     dtype=torch.int32,
                     device=self.device,
                 ),
                 "actions_mask": Bounded(
                     low=0,
                     high=1,
-                    shape=torch.Size((*self.batch_size, 2, self.action_size)),
+                    shape=torch.Size((*self.batch_size, self.num_defenders + self.num_attackers, self.action_size)),
                     dtype=torch.bool,
                     device=self.device,
                 ),
+                # We assume that all instances of attackers and defenders share the same view
                 "graph_x_seq": Unbounded(
                     shape=torch.Size((*self.batch_size, 2, self.num_steps + 1, self.map.num_nodes, self.graph_x_size)),
                     dtype=torch.float32,
@@ -164,11 +169,12 @@ class EnvironmentBase(EnvBase, ABC):
         self.action_spec = Bounded(
             low=0,
             high=self.action_size - 1,
-            shape=torch.Size((*self.batch_size, 2)),
+            shape=torch.Size((*self.batch_size, self.num_defenders + self.num_attackers)),
             dtype=torch.int32,
             device=self.device,
         )
 
+        # Reward for both defender and attacker
         self.reward_spec = Unbounded(
             shape=torch.Size((*self.batch_size, 2)),
             dtype=torch.float32,
@@ -251,7 +257,7 @@ class EnvironmentBase(EnvBase, ABC):
             {
                 "step_count_seq": step_count_seq,
                 "step_count": self.step_count.clone(),
-                "actions_seq": torch.full((*self.batch_size, 2, self.num_steps + 1), -1, dtype=torch.int32, device=self.device),
+                "actions_seq": torch.full((*self.batch_size, self.num_defenders + self.num_attackers, self.num_steps + 1), -1, dtype=torch.int32, device=self.device),
                 "actions_mask": self.actions_mask,
                 "game_id": self.game_id.clone(),
                 "graph_x_seq": graph_x_seq,

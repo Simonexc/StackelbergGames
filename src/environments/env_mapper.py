@@ -3,11 +3,12 @@ from typing import NamedTuple
 
 from environments.flipit_geometric import FlipItEnv, FlipItMap
 from environments.poachers import PoachersEnv, PoachersMap
+from environments.police import PoliceEnv, PoliceMap
 
 
 class EnvPair(NamedTuple):
-    env_class: type[FlipItEnv | PoachersEnv]
-    map_class: type[FlipItMap | PoachersMap]
+    env_class: type[FlipItEnv | PoachersEnv | PoliceEnv]
+    map_class: type[FlipItMap | PoachersMap | PoliceMap]
 
 
 class EnvMapper(Enum):
@@ -18,6 +19,10 @@ class EnvMapper(Enum):
     poachers = EnvPair(
         env_class=PoachersEnv,
         map_class=PoachersMap,
+    )
+    police = EnvPair(
+        env_class=PoliceEnv,
+        map_class=PoliceMap,
     )
 
     @classmethod

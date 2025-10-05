@@ -1,0 +1,19 @@
+Two players:
+- one attacker (robber)
+- 3 defenders (police)
+Players move in a grid-like city map represented as an undirected graph. Each node
+can have at most 4 neighbors and at least one. The attacker starts at a random node
+which is called a hideout. Defenders start at random nodes which are not the hideout. Each
+defender has to be on a different node. The goal of the attacker is attack as many targets as possible before
+being caught. After a target is attacked it becomes unavailable. To collect the reward for a given target, he
+needs to come back to the hideout before he can attack again. The goal of the defenders is to catch the attacker.
+Each policeman can arrest one of neighboring nodes or the node that he is currently on. If the attacker is on the arrested
+node, he is caught and the game ends. Game also ends if the attacker collects all rewards or after a fixed number of time steps.
+Attacker can move through defenders unnoticed, even if he ends his turn on a node occupied by a defender.
+Attacker can:
+- move to one of the neighboring nodes
+- attack a node that he is currently on, but only if it is a target that has not been attacked yet and he didn't attack any other target before reaching the hideout
+Defender can:
+- move to one of the neighboring nodes (as long as no other defender is there)
+- arrest neighboring node or the node that he is currently on
+- check if the attacker visited a given neighboring node or the node that he is currently on in the last k turns

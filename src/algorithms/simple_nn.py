@@ -116,7 +116,7 @@ class GNNBackbone(BackboneBase):
 
         self.output_projection = nn.Sequential(
             nn.Linear(
-                self.config.hidden_size * (self.extractor.input_size["available_moves"] + 1) + self.extractor.input_size["x"],
+                self.config.hidden_size * (self.extractor.input_size["available_moves"] + self.extractor.input_size["position"]) + self.extractor.input_size["x"],
                 self.embedding_size,
             ),
             nn.ReLU(),
@@ -292,17 +292,31 @@ class BackboneTransformer(BackboneBase):
 
 
 class ActorHead(nn.Module):
-    def __init__(self, embedding_size: int, player_type: int, action_spec: Bounded, hidden_size: int, device: torch.device | str) -> None:
+    def __init__(self, embedding_size: int, player_start_id: int, action_spec: Bounded, hidden_size: int,
+                 device: torch.device | str, num_heads: int = 1) -> None:
         super().__init__()
 
-        self.actor_head = nn.Sequential(
-            nn.Linear(embedding_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, action_spec.high+1),
-        )
+        self.num_heads = num_heads
+        if self.num_heads == 1:  # backwards compatibility
+            self.actor_head = nn.Sequential(
+                nn.Linear(embedding_size, hidden_size),
+                nn.ReLU(),
+                nn.Linear(hidden_size, action_spec.high[0] + 1),
+            )
+            self.actor_heads = nn.ModuleList([self.actor_head])
+        else:
+            self.actor_heads = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(embedding_size, hidden_size),
+                    nn.ReLU(),
+                    nn.Linear(hidden_size, high+1),
+                )
+                for high in action_spec.high
+            ])
+
         self.do_sample = True
         self.action_spec = action_spec
-        self.player_type = player_type
+        self.player_start_id = player_start_id
         self.device = device
 
     def to_module(self) -> ProbabilisticActor:
@@ -319,11 +333,16 @@ class ActorHead(nn.Module):
     def forward(self, x: torch.Tensor, actions_mask: torch.Tensor) -> torch.Tensor:
         x_device = x.device
         is_grad = x.requires_grad
-        x = self.actor_head(x.to(self.device))
-        x[~actions_mask[..., self.player_type, :]] = -1e8  # Mask invalid actions
-        if is_grad:
-            return x
-        return x.to(x_device)  # Ensure output is on the original device
+
+        outputs = []
+        for i, head in enumerate(self.actor_heads):
+            head_output = head(x.to(self.device))
+            head_output[~actions_mask[..., self.player_start_id + i, :]] = -1e8  # Mask invalid actions
+            if not is_grad:
+                head_output = head_output.to(x_device)  # Ensure output is on the original device
+            outputs.append(head_output)
+
+        return torch.stack(outputs, dim=-2)
 
 
 class ValueHead(nn.Module):
@@ -361,6 +380,8 @@ class NNAgentPolicy(BaseAgent):
         head_config: HeadConfig,
         backbone_config: BackboneConfig,
         agent_config: AgentNNConfig,
+        num_defenders: int,
+        num_attackers: int,
         device: torch.device | str,
         run_name: str,
         agent_id: int | None = None,
@@ -370,11 +391,13 @@ class NNAgentPolicy(BaseAgent):
             device=device,
             run_name=run_name,
             agent_id=agent_id,
+            num_defenders=num_defenders,
+            num_attackers=num_attackers,
         )
         self.action_size = action_size
 
         action_spec = Bounded(
-            shape=torch.Size((1,)),
+            shape=torch.Size((head_config.num_heads,)),
             low=0,
             high=action_size - 1,
             dtype=torch.int32,
@@ -390,10 +413,11 @@ class NNAgentPolicy(BaseAgent):
 
         actor_head = ActorHead(
             embedding_size=agent_config.embedding_size,
-            player_type=player_type,
+            player_start_id=0 if player_type == 0 else num_defenders,
             action_spec=action_spec,
             hidden_size=head_config.hidden_size,
             device=self._device,
+            num_heads=head_config.num_heads,
         ).to(self._device)
         value_head = ValueHead(
             embedding_size=agent_config.embedding_size,
@@ -435,6 +459,8 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
         backbone_config: BackboneConfig,
         agent_config: AgentNNConfig,
         env_type: EnvMapper,
+        num_defenders: int,
+        num_attackers: int,
         agent_id: int | None = None,
         scheduler_steps: int | None = None,
         add_logs: bool = True,
@@ -450,6 +476,8 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
             device=device,
             run_name=run_name,
             agent_id=agent_id,
+            num_defenders=num_defenders,
+            num_attackers=num_attackers,
         )
 
         self._training_config = training_config
@@ -464,13 +492,13 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
             clip_epsilon=loss_config.clip_epsilon,
             entropy_bonus=bool(loss_config.entropy_eps),
             entropy_coef=loss_config.entropy_eps,
-            normalize_advantage=True,
+            normalize_advantage=False,
             critic_coef=loss_config.critic_coef,
             loss_critic_type="smooth_l1",
         )
 
         self.advantage = GAE(
-            gamma=loss_config.gamma, lmbda=loss_config.lmbda, value_network=self.agent.get_value_head(), average_gae=False#, device=torch.device("cuda:0")
+            gamma=loss_config.gamma, lmbda=loss_config.lmbda, value_network=self.agent.get_value_head(), average_gae=True#, device=torch.device("cuda:0")
         )
 
         self.optimizer = torch.optim.Adam(
@@ -487,11 +515,18 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
             )
 
     def _training_step(self, tensordict: TensorDictBase) -> dict:
+        if self.player_type == 0:
+            tensordict["next"]["reward"] = tensordict["next"]["reward"].repeat(1, self.num_defenders).unsqueeze(-1)
+            tensordict["advantage"] = tensordict["advantage"].repeat(1, self.num_defenders).unsqueeze(-1)
+        else:
+           tensordict["next"]["reward"] = tensordict["next"]["reward"].repeat(1, 1).unsqueeze(-1)
+           tensordict["advantage"] = tensordict["advantage"].repeat(1, 1).unsqueeze(-1)
+
         loss_vals = self.loss(tensordict)
         loss_value = (
-            loss_vals["loss_objective"]  # **2
-            + loss_vals["loss_critic"]  # **2
-            + loss_vals["loss_entropy"]  # **2
+            loss_vals["loss_objective"]
+            + loss_vals["loss_critic"]
+            + loss_vals["loss_entropy"]
         )
 
         self.optimizer.zero_grad()
@@ -562,12 +597,20 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
         tensordict_data = tensordict_data.flatten()
 
         # update tensordict
-        tensordict_data.update({
-            "action": tensordict_data["action"][..., self.player_type],
-            "logits": tensordict_data["logits"][..., self.player_type],
-            "sample_log_prob": tensordict_data["sample_log_prob"][..., self.player_type],
-            "embedding": tensordict_data["embedding"][..., self.player_type],
-        })
+        if self.player_type == 0:
+            tensordict_data.update({
+                "action": tensordict_data["action"][..., :self.num_defenders],
+                "logits": tensordict_data["logits"][..., :self.num_defenders, :],
+                "sample_log_prob": tensordict_data["sample_log_prob"][..., :self.num_defenders],
+                "embedding": tensordict_data["embedding"][..., self.player_type],
+            })
+        else:
+            tensordict_data.update({
+                "action": tensordict_data["action"][..., self.num_defenders:],
+                "logits": tensordict_data["logits"][..., self.num_defenders:, :],
+                "sample_log_prob": tensordict_data["sample_log_prob"][..., self.num_defenders:],
+                "embedding": tensordict_data["embedding"][..., self.player_type],
+            })
         tensordict_data["next"].update({
             "reward": tensordict_data["next"]["reward"][..., self.player_type].unsqueeze(-1),  # retain dimensionality
         })
