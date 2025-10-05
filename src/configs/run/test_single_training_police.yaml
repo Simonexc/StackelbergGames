@@ -36,8 +36,8 @@ keys_backbone_attacker:
   x:
     - StepCountExtractor
     - LastActionExtractor
-    - PositionLastExtractor
-    - AvailableMovesLastExtractor
+    - AllPositionLastExtractor
+    - AllAvailableMovesLastExtractor
     - TargetsAttackedLastExtractor
     - CanAttackLastExtractor
 

@@ -41,9 +41,9 @@ keys_backbone_attacker:
   graph_x:
     - GraphXSeqExtractor
   position:
-    - PositionIntSeqExtractor
+    - AllPositionIntSeqExtractor
   available_moves:
-    - AvailableMovesIntSeqExtractor
+    - AllAvailableMovesIntSeqExtractor
   graph_edge_index:
     - GraphEdgeIndexExtractor
 

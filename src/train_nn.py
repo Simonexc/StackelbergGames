@@ -40,15 +40,30 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     loss_config_defender = LossConfig.from_dict(config, suffix="_defender")
     training_config_attacker = TrainingConfig.from_dict(config, suffix="_attacker")
     loss_config_attacker = LossConfig.from_dict(config, suffix="_attacker")
-    agent_config = AgentNNConfig.from_dict(config)
-    backbone_config = BackboneConfig.from_dict(config, suffix=f"_backbone")
-    head_config = HeadConfig.from_dict(config, suffix=f"_head")
+    try:
+        agent_config = AgentNNConfig.from_dict(config)
+        backbone_config = BackboneConfig.from_dict(config, suffix=f"_backbone")
+        head_config = HeadConfig.from_dict(config, suffix=f"_head")
+
+        agent_config_attacker = agent_config
+        agent_config_defender = agent_config
+        backbone_config_attacker = backbone_config
+        backbone_config_defender = backbone_config
+        head_config_attacker = head_config
+        head_config_defender = head_config
+    except TypeError:  # HACK: means that we have separate configs for attacker and defender
+        agent_config_attacker = AgentNNConfig.from_dict(config, suffix="_attacker")
+        agent_config_defender = AgentNNConfig.from_dict(config, suffix="_defender")
+        backbone_config_attacker = BackboneConfig.from_dict(config, suffix="_backbone_attacker")
+        backbone_config_defender = BackboneConfig.from_dict(config, suffix="_backbone_defender")
+        head_config_attacker = HeadConfig.from_dict(config, suffix="_head_attacker")
+        head_config_defender = HeadConfig.from_dict(config, suffix="_head_defender")
 
     assert training_config_attacker.player_turns == training_config_defender.player_turns
 
     env_map, env = env_config_.create("cpu")
 
-    defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=backbone_config.extractors)
+    defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=backbone_config_defender.extractors)
     defender_agent = TrainableNNAgentPolicy(
         player_type=0,
         max_sequence_size=env_config_.num_steps + 1,
@@ -58,19 +73,21 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
         device=device,
         loss_config=loss_config_defender,
         training_config=training_config_defender,
-        agent_config=agent_config,
-        backbone_config=backbone_config,
-        head_config=head_config,
+        agent_config=agent_config_defender,
+        backbone_config=backbone_config_defender,
+        head_config=head_config_defender,
         run_name=run_name,
         add_logs=log_wandb,  # Defender logs during training
+        num_defenders=env.num_defenders,
+        num_attackers=env.num_attackers,
     )
-    attacker_extractor = CombinedExtractor(player_type=1, env=env, actions_map=backbone_config.extractors)
+    attacker_extractor = CombinedExtractor(player_type=1, env=env, actions_map=backbone_config_attacker.extractors)
     attacker_agent = MultiAgentPolicy(
         action_size=env.action_size,
         player_type=1,
         device=device,
         run_name=run_name,
-        embedding_size=agent_config.embedding_size,
+        embedding_size=agent_config_attacker.embedding_size,
         policy_generator=AgentGenerator(
             TrainableNNAgentPolicy,
             {
@@ -84,11 +101,13 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
                 "training_config": training_config_attacker,
                 "run_name": run_name,
                 "add_logs": False,  # Attacker does not log during training
-                "agent_config": agent_config,
-                "backbone_config": backbone_config,
-                "head_config": head_config,
+                "agent_config": agent_config_attacker,
+                "backbone_config": backbone_config_attacker,
+                "head_config": head_config_attacker,
             }
         ),
+        num_defenders=env.num_defenders,
+        num_attackers=env.num_attackers,
     )
 
     combined_policy = CombinedPolicy(
