@@ -384,6 +384,7 @@ class NNAgentPolicy(BaseAgent):
         num_attackers: int,
         device: torch.device | str,
         run_name: str,
+        gpus: list[int],
         agent_id: int | None = None,
     ) -> None:
         super().__init__(
@@ -403,27 +404,27 @@ class NNAgentPolicy(BaseAgent):
             dtype=torch.int32,
         )
 
-        backbone = self._get_backbone_class(backbone_config.cls_name)(
+        backbone = torch.nn.DataParallel(self._get_backbone_class(backbone_config.cls_name)(
             config=backbone_config,
             extractor=extractor,
             embedding_size=agent_config.embedding_size,
             max_sequence_size=max_sequence_size,
             device=self._device,
-        ).to(self._device)
+        ), device_ids=gpus)#.to(self._device)
 
-        actor_head = ActorHead(
+        actor_head = torch.nn.DataParallel(ActorHead(
             embedding_size=agent_config.embedding_size,
             player_start_id=0 if player_type == 0 else num_defenders,
             action_spec=action_spec,
             hidden_size=head_config.hidden_size,
             device=self._device,
             num_heads=head_config.num_heads,
-        ).to(self._device)
-        value_head = ValueHead(
+        ), device_ids=gpus)#.to(self._device)
+        value_head = torch.nn.DataParallel(ValueHead(
             embedding_size=agent_config.embedding_size,
             hidden_size=head_config.hidden_size,
             device=self._device,
-        ).to(self._device)
+        ), device_ids=gpus)#.to(self._device)
 
         self.agent = ActorValueOperator(
             backbone.to_module(),
@@ -461,6 +462,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
         env_type: EnvMapper,
         num_defenders: int,
         num_attackers: int,
+        gpus: list[int],
         agent_id: int | None = None,
         scheduler_steps: int | None = None,
         add_logs: bool = True,
@@ -478,6 +480,7 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
             agent_id=agent_id,
             num_defenders=num_defenders,
             num_attackers=num_attackers,
+            gpus=gpus,
         )
 
         self._training_config = training_config
