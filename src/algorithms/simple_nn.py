@@ -35,9 +35,9 @@ class BackboneBase(nn.Module, ABC):
         self.config = config
         self.device = device
 
-    def to_module(self, gpus) -> TensorDictModule:
+    def to_module(self) -> TensorDictModule:
         return TensorDictModule(
-            torch.nn.DataParallel(self, device_ids=gpus), in_keys=self.extractor.in_keys, out_keys=["embedding"]
+            self, in_keys=self.extractor.in_keys, out_keys=["embedding"]
         )
 
     @abstractmethod
@@ -319,10 +319,10 @@ class ActorHead(nn.Module):
         self.player_start_id = player_start_id
         self.device = device
 
-    def to_module(self, gpus) -> ProbabilisticActor:
+    def to_module(self) -> ProbabilisticActor:
         return ProbabilisticActor(
             TensorDictModule(
-                torch.nn.DataParallel(self, device_ids=gpus), in_keys=["embedding", "actions_mask"], out_keys=["logits"]
+                self, in_keys=["embedding", "actions_mask"], out_keys=["logits"]
             ),
             spec=self.action_spec,
             in_keys=["logits"],
@@ -356,7 +356,7 @@ class ValueHead(nn.Module):
             nn.Linear(hidden_size, 1),
         )
 
-    def to_module(self, gpus) -> ValueOperator:
+    def to_module(self) -> ValueOperator:
         return ValueOperator(
             module=self, in_keys=["embedding"]
         )
@@ -384,7 +384,6 @@ class NNAgentPolicy(BaseAgent):
         num_attackers: int,
         device: torch.device | str,
         run_name: str,
-        gpus: list[int],
         agent_id: int | None = None,
     ) -> None:
         super().__init__(
@@ -427,9 +426,9 @@ class NNAgentPolicy(BaseAgent):
         ).to(self._device)
 
         self.agent = ActorValueOperator(
-            backbone.to_module(gpus),
-            actor_head.to_module(gpus),
-            value_head.to_module(gpus),
+            backbone.to_module(),
+            actor_head.to_module(),
+            value_head.to_module(),
         )
 
     @staticmethod
@@ -462,7 +461,6 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
         env_type: EnvMapper,
         num_defenders: int,
         num_attackers: int,
-        gpus: list[int],
         agent_id: int | None = None,
         scheduler_steps: int | None = None,
         add_logs: bool = True,
@@ -480,7 +478,6 @@ class TrainableNNAgentPolicy(NNAgentPolicy, BaseTrainableAgent):
             agent_id=agent_id,
             num_defenders=num_defenders,
             num_attackers=num_attackers,
-            gpus=gpus,
         )
 
         self._training_config = training_config

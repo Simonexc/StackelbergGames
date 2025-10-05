@@ -26,7 +26,7 @@ https://arxiv.org/pdf/2306.01324
 """
 
 
-def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: str | None = None, config=None, gpu_ids: list[int] | None = None):
+def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: str | None = None, config=None):
     player_name = Player(player).name
     if not run_name:
         run_name = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-{player_name}'
@@ -115,7 +115,6 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
             run_name=run_name,
             num_defenders=env.num_defenders,
             num_attackers=env.num_attackers,
-            gpus=gpu_ids,
         )
         attacker_agent = TrainableNNAgentPolicy(
             player_type=1,
@@ -132,7 +131,6 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
             agent_config=agent_config_attacker,
             num_defenders=env.num_defenders,
             num_attackers=env.num_attackers,
-            gpus=gpu_ids,
             # scheduler_steps=training_config.total_steps_per_turn // training_config.steps_per_batch + 5,
         )
 
@@ -204,23 +202,12 @@ if __name__ == "__main__":
     is_fork = multiprocessing.get_start_method() == "fork"
 
     # Parse GPU IDs if provided
-    gpu_ids = None
-    if args.gpus is not None and torch.cuda.is_available() and not is_fork:
-        gpu_ids = [int(gpu_id.strip()) for gpu_id in args.gpus.split(',')]
-        # Validate GPU IDs
-        available_gpus = torch.cuda.device_count()
-        for gpu_id in gpu_ids:
-            if gpu_id >= available_gpus:
-                raise ValueError(f"GPU {gpu_id} not available. Only {available_gpus} GPUs detected.")
-        device = torch.device(f"cuda:{gpu_ids[0]}")
-        print(f"Using GPUs: {gpu_ids}")
-    else:
-        device = (
-            torch.device(0)
-            if torch.cuda.is_available() and not is_fork
-            else torch.device("cpu")
-        )
-        print(f"Using device: {device}")
+    device = (
+        torch.device(0)
+        if torch.cuda.is_available() and not is_fork
+        else torch.device("cpu")
+    )
+    print(f"Using device: {device}")
 
     cpu_cores = min(12, multiprocessing.cpu_count())
     print(f"Creating {cpu_cores} processes.")
@@ -236,4 +223,4 @@ if __name__ == "__main__":
         config=config_content,
         name=run_name_,
     ) as run:
-        training_loop(device, cpu_cores, args.player, run_name=run_name_, config=run.config, gpu_ids=gpu_ids)
+        training_loop(device, cpu_cores, args.player, run_name=run_name_, config=run.config)
