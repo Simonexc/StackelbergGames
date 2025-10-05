@@ -144,7 +144,7 @@ if __name__ == "__main__":
     with open(args.config, "r") as file:
         config_content = yaml.safe_load(file)
 
-    run_name_ = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-full-{args.name}'
+    run_name_ = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-full-{uuid.uuid4().hex[:8]}{args.name}'
     with wandb.init(
         entity=env_config["WANDB_ENTITY"],
         project=env_config["WANDB_PROJECT"],
