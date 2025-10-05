@@ -358,7 +358,7 @@ class ValueHead(nn.Module):
 
     def to_module(self, gpus) -> ValueOperator:
         return ValueOperator(
-            module=torch.nn.DataParallel(self, device_ids=gpus), in_keys=["embedding"]
+            module=self, in_keys=["embedding"]
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
