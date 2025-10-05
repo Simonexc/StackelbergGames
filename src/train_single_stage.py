@@ -26,7 +26,7 @@ https://arxiv.org/pdf/2306.01324
 """
 
 
-def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: str | None = None, config=None):
+def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: str | None = None, config=None, gpu_ids: list[int] | None = None):
     player_name = Player(player).name
     if not run_name:
         run_name = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-{player_name}'
@@ -134,6 +134,19 @@ def training_loop(device: torch.device, cpu_cores: int, player: int, run_name: s
             # scheduler_steps=training_config.total_steps_per_turn // training_config.steps_per_batch + 5,
         )
 
+    # Wrap models with DataParallel if multiple GPUs are specified
+    if gpu_ids is not None and len(gpu_ids) > 1:
+        print(f"Using DataParallel with GPUs: {gpu_ids}")
+        # Wrap the trainable agent's model with DataParallel
+        if player == 0:
+            # Wrap defender agent's neural network components
+            if hasattr(defender_agent, 'agent') and defender_agent.agent is not None:
+                defender_agent.agent = torch.nn.DataParallel(defender_agent.agent, device_ids=gpu_ids)
+        else:
+            # Wrap attacker agent's neural network components
+            if hasattr(attacker_agent, 'agent') and attacker_agent.agent is not None:
+                attacker_agent.agent = torch.nn.DataParallel(attacker_agent.agent, device_ids=gpu_ids)
+
     combined_policy = CombinedPolicy(
         defender_agent,
         attacker_agent,
@@ -170,18 +183,38 @@ if __name__ == "__main__":
         default="",
         help="Name of run",
     )
+    parser.add_argument(
+        "--gpus",
+        type=str,
+        default=None,
+        help="Comma-separated list of GPU IDs to use (e.g., '0,1,2'). If not specified, uses single GPU or CPU",
+    )
     args = parser.parse_args()
     torch.multiprocessing.set_start_method('spawn', force=True)
     torch.multiprocessing.set_sharing_strategy('file_system')
 
     # General settings defining environment
     is_fork = multiprocessing.get_start_method() == "fork"
-    device = (
-        torch.device(0)
-        if torch.cuda.is_available() and not is_fork
-        else torch.device("cpu")
-    )
-    print(f"Using device: {device}")
+
+    # Parse GPU IDs if provided
+    gpu_ids = None
+    if args.gpus is not None and torch.cuda.is_available() and not is_fork:
+        gpu_ids = [int(gpu_id.strip()) for gpu_id in args.gpus.split(',')]
+        # Validate GPU IDs
+        available_gpus = torch.cuda.device_count()
+        for gpu_id in gpu_ids:
+            if gpu_id >= available_gpus:
+                raise ValueError(f"GPU {gpu_id} not available. Only {available_gpus} GPUs detected.")
+        device = torch.device(f"cuda:{gpu_ids[0]}")
+        print(f"Using GPUs: {gpu_ids}")
+    else:
+        device = (
+            torch.device(0)
+            if torch.cuda.is_available() and not is_fork
+            else torch.device("cpu")
+        )
+        print(f"Using device: {device}")
+
     cpu_cores = min(12, multiprocessing.cpu_count())
     print(f"Creating {cpu_cores} processes.")
 
@@ -196,4 +229,4 @@ if __name__ == "__main__":
         config=config_content,
         name=run_name_,
     ) as run:
-        training_loop(device, cpu_cores, args.player, run_name=run_name_, config=run.config)
+        training_loop(device, cpu_cores, args.player, run_name=run_name_, config=run.config, gpu_ids=gpu_ids)

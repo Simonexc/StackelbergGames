@@ -55,7 +55,6 @@ keys_backbone_defender:
     - AvailableMovesLastExtractor
     - TargetsAttackedLastExtractor
     - CheckResultsLastExtractor
-    #- UnitControlledExtractor
 
 num_nodes: 10
 num_steps: 20
