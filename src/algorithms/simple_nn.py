@@ -35,6 +35,7 @@ class BackboneBase(nn.Module, ABC):
         self.config = config
         self.device = device
 
+    @staticmethod
     def to_module(self) -> TensorDictModule:
         return TensorDictModule(
             self, in_keys=self.extractor.in_keys, out_keys=["embedding"]
@@ -319,6 +320,7 @@ class ActorHead(nn.Module):
         self.player_start_id = player_start_id
         self.device = device
 
+    @staticmethod
     def to_module(self) -> ProbabilisticActor:
         return ProbabilisticActor(
             TensorDictModule(
@@ -356,6 +358,7 @@ class ValueHead(nn.Module):
             nn.Linear(hidden_size, 1),
         )
 
+    @staticmethod
     def to_module(self) -> ValueOperator:
         return ValueOperator(
             module=self, in_keys=["embedding"]
@@ -427,9 +430,9 @@ class NNAgentPolicy(BaseAgent):
         ), device_ids=gpus)#.to(self._device)
 
         self.agent = ActorValueOperator(
-            backbone.to_module(),
-            actor_head.to_module(),
-            value_head.to_module(),
+            BackboneBase.to_module(backbone),
+            ActorHead.to_module(actor_head),
+            ValueHead.to_module(value_head),
         )
 
     @staticmethod
