@@ -176,6 +176,7 @@ cython_debug/
 src/saved_models
 src/wandb
 src/*.pth
+src/results
 
 .python-version
 slurm_logs/

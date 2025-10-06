@@ -30,6 +30,7 @@ class EnvMapBase(Data, ABC):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         generator = torch.Generator()
+        generator.seed()
         if config.seed is not None:
             generator = generator.manual_seed(config.seed)
 

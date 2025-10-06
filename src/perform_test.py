@@ -111,6 +111,8 @@ if __name__ == "__main__":
         head_config=nn_head_config,
         run_name="test",
         add_logs=False,  # No logs during testing
+        num_attackers=env.num_attackers,
+        num_defenders=env.num_defenders,
     )
     nn_defender_agent.eval()
     nn_defender_agent.load(os.path.join(nn_model_path, "defender", "agent_0.pth"))
@@ -138,8 +140,12 @@ if __name__ == "__main__":
                 "agent_config": nn_agent_config,
                 "backbone_config": nn_backbone_config,
                 "head_config": nn_head_config,
+                "num_attackers": env.num_attackers,
+                "num_defenders": env.num_defenders,
             }
         ),
+        num_attackers=env.num_attackers,
+        num_defenders=env.num_defenders,
     )
     nn_attacker_agent.eval()
     nn_attacker_agent.load(os.path.join(nn_model_path, "attacker"))
@@ -171,6 +177,8 @@ if __name__ == "__main__":
         head_config=gnn_head_config,
         run_name="test",
         add_logs=False,  # No logs during testing
+        num_attackers=env.num_attackers,
+        num_defenders=env.num_defenders,
     )
     gnn_defender_agent.eval()
     gnn_defender_agent.load(os.path.join(gnn_model_path, "defender", "agent_0.pth"))
@@ -198,8 +206,12 @@ if __name__ == "__main__":
                 "agent_config": gnn_agent_config,
                 "backbone_config": gnn_backbone_config,
                 "head_config": gnn_head_config,
+                "num_attackers": env.num_attackers,
+                "num_defenders": env.num_defenders,
             }
         ),
+        num_attackers=env.num_attackers,
+        num_defenders=env.num_defenders,
     )
     gnn_attacker_agent.eval()
     gnn_attacker_agent.load(os.path.join(gnn_model_path, "attacker"))
@@ -231,6 +243,8 @@ if __name__ == "__main__":
         head_config=gnn_transformer_head_config,
         run_name="test",
         add_logs=False,  # No logs during testing
+        num_attackers=env.num_attackers,
+        num_defenders=env.num_defenders,
     )
     gnn_transformer_defender_agent.eval()
     gnn_transformer_defender_agent.load(os.path.join(gnn_transformer_model_path, "defender", "agent_0.pth"))
@@ -258,8 +272,12 @@ if __name__ == "__main__":
                 "agent_config": gnn_transformer_agent_config,
                 "backbone_config": gnn_transformer_backbone_config,
                 "head_config": gnn_transformer_head_config,
+                "num_attackers": env.num_attackers,
+                "num_defenders": env.num_defenders,
             }
         ),
+        num_attackers=env.num_attackers,
+        num_defenders=env.num_defenders,
     )
     gnn_transformer_attacker_agent.eval()
     gnn_transformer_attacker_agent.load(os.path.join(gnn_transformer_model_path, "attacker"))
@@ -297,6 +315,8 @@ if __name__ == "__main__":
         player_type=1,
         device="cpu",
         run_name="test",
+        num_attackers=env.num_attackers,
+        num_defenders=env.num_defenders,
     )
     greedy_oracle_attacker_agent = GreedyOracleAgent(
         action_size=env.action_size,

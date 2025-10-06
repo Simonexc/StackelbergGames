@@ -1,4 +1,4 @@
-name: single_attacker_police_gnn
+name: single_attacker_police_gnn_transformer
 method: bayes
 metric:
   goal: maximize
@@ -48,6 +48,8 @@ parameters:
     max: 1.0
 
   cls_name_backbone_attacker:
+    value: BackboneTransformer
+  embedding_cls_name_backbone_attacker:
     value: GNNBackbone
   embedding_size_attacker:
     distribution: q_log_uniform_values
@@ -64,19 +66,29 @@ parameters:
   keys_backbone_attacker:
     value:
       x:
-        - StepCountExtractor
-        - LastActionExtractor
-        - CanAttackLastExtractor
+        - StepCountSeqExtractor
+        - ActionsExtractor
+        - CanAttackSeqExtractor
       graph_x:
-        - GraphXExtractor
+        - GraphXSeqExtractor
       position:
-        - AllPositionIntLastExtractor
+        - AllPositionIntSeqExtractor
       available_moves:
-        - AllAvailableMovesIntExtractor
+        - AllAvailableMovesIntSeqExtractor
       graph_edge_index:
         - GraphEdgeIndexExtractor
+  num_head_backbone_attacker:
+    distribution: q_uniform
+    min: 1
+    max: 6
+  d_model_backbone_attacker:
+    distribution: q_log_uniform_values
+    min: 32
+    max: 256
 
   cls_name_backbone_defender:
+    value: BackboneTransformer
+  embedding_cls_name_backbone_defender:
     value: GNNBackbone
   embedding_size_defender:
     value: 32
@@ -87,18 +99,22 @@ parameters:
   keys_backbone_defender:
     value:
       x:
-        - StepCountExtractor
-        - LastActionExtractor
+        - StepCountSeqExtractor
+        - ActionsExtractor
       graph_x:
-        - GraphXExtractor
+        - GraphXSeqExtractor
       position:
-        - PositionIntLastExtractor
+        - PositionIntSeqExtractor
       available_moves:
-        - AvailableMovesIntExtractor
+        - AvailableMovesIntSeqExtractor
       graph_edge_index:
         - GraphEdgeIndexExtractor
   num_heads_head_defender:
     value: 2
+  num_head_backbone_defender:
+    value: 1
+  d_model_backbone_defender:
+    value: 32
 
   num_nodes:
     value: 30

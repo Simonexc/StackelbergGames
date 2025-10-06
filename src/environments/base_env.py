@@ -38,6 +38,7 @@ class EnvironmentBase(EnvBase, ABC):
         self.num_defenders = num_defenders
         self.num_attackers = num_attackers
         self._generator = torch.Generator(device=device)
+        self._generator.seed()
 
         super().__init__(device=device, batch_size=batch_size)
         self._make_spec()
@@ -87,7 +88,8 @@ class EnvironmentBase(EnvBase, ABC):
 
     @final
     def _set_seed(self, seed: int | None) -> None:
-        self._generator.manual_seed(seed)
+        #self._generator.manual_seed(seed)
+        pass
 
     @final
     def _make_spec(self) -> None:

@@ -115,6 +115,7 @@ class PoachersEnv(EnvironmentBase):
             self.position = self.map.entry_nodes_list[:2]
         else:
             self.position = self.map.entry_nodes_list[torch.randperm(self.map.entry_nodes_list.shape[-1], generator=self._generator, device=self.device)[:2]]
+            print(self.position, torch.rand((2,), generator=self._generator, device=self.device))
         self.freeze_start_point = freeze_start_point
         self.nodes_prepared = torch.zeros(self.map.num_nodes, dtype=torch.bool, device=self.device)
         self.nodes_collected = torch.zeros(self.map.num_nodes, dtype=torch.bool, device=self.device)
