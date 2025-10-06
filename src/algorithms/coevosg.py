@@ -503,7 +503,7 @@ class CoevoSGAgentBase(BaseAgent, ABC):
         agent_id: int | None = None,
         pool: multiprocessing.pool.Pool | None = None,
     ) -> None:
-        super().__init__(player_type, device, run_name, agent_id)
+        super().__init__(player_type, device, run_name, agent_id, num_attackers=env.num_attackers, num_defenders=env.num_defenders)
 
         assert isinstance(env.action_spec, Bounded), "Action spec should be of type Bounded."
         self.action_size = env.action_size
