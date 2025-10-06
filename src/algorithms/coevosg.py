@@ -118,10 +118,10 @@ class PureStrategy(StrategyBase):
         self.env = env
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
-        action = self.pure_strategy[tensordict["step_count"].item()]
-        logits = torch.zeros(self.action_size, dtype=torch.float32, device=tensordict.device)
-        logits[action] = 1.0
-        sample_log_prob = torch.zeros(torch.Size(()), dtype=torch.float32, device=tensordict.device)
+        action = self.pure_strategy[tensordict["step_count"].item()].unsqueeze(-1)
+        logits = torch.zeros((*action.shape, self.action_size), dtype=torch.float32, device=tensordict.device)
+        logits[torch.arange(0, action.shape[-1]), action] = 1.0
+        sample_log_prob = torch.zeros_like(action, dtype=torch.float32, device=tensordict.device)
         embedding = torch.zeros(32, dtype=torch.float32, device=tensordict.device)
 
         tensordict.update({
