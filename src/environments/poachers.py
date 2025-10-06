@@ -40,15 +40,15 @@ class PoachersMap(EnvMapUndirected):
             exclude_nodes=torch.where(entry_nodes)[0]
         )
 
-        node_rewards = torch.rand(config.num_nodes, generator=generator, dtype=torch.float32).to(device)
+        node_rewards = 1 + torch.rand(config.num_nodes, generator=generator, dtype=torch.float32).to(device) * 5
         node_rewards[~reward_nodes] = 0.0  # Set rewards to 0 for non-reward nodes
         upgrade_cost = -torch.rand(config.num_nodes, generator=generator, dtype=torch.float32).to(device)
         upgrade_cost[~reward_nodes] = 0.0  # Set upgrade costs to 0 for non-reward nodes
 
-        move_cost = -torch.rand(torch.Size(()), generator=generator, dtype=torch.float32).to(device) / config.num_nodes
+        move_cost = -torch.rand(torch.Size(()), generator=generator, dtype=torch.float32).to(device) / (4 * config.num_nodes)
         preparation_reward = 1 + torch.rand(
             torch.Size(()), generator=generator, dtype=torch.float32
-        ).to(device)  # Fixed preparation reward
+        ).to(device) * 2  # Fixed preparation reward
 
         return (
             torch.stack([node_rewards, upgrade_cost], dim=1),
@@ -115,7 +115,6 @@ class PoachersEnv(EnvironmentBase):
             self.position = self.map.entry_nodes_list[:2]
         else:
             self.position = self.map.entry_nodes_list[torch.randperm(self.map.entry_nodes_list.shape[-1], generator=self._generator, device=self.device)[:2]]
-            print(self.position, torch.rand((2,), generator=self._generator, device=self.device))
         self.freeze_start_point = freeze_start_point
         self.nodes_prepared = torch.zeros(self.map.num_nodes, dtype=torch.bool, device=self.device)
         self.nodes_collected = torch.zeros(self.map.num_nodes, dtype=torch.bool, device=self.device)
