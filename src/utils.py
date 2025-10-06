@@ -170,7 +170,7 @@ def compare_agent_pairs(agent_pairs: list[tuple[BaseAgent, BaseAgent, str]], att
                         env.freeze_start_point = True
                     else:
                         env.freeze_start_point = False
-                    env.reset()ss
+                    env.reset()
                     reward = combined.single_run(env, current_player=0, add_logs=False)
                     def_rewards.append(reward[..., 0].sum().item())
                     att_rewards.append(reward[..., 1].sum().item())
