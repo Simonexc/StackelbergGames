@@ -34,6 +34,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
             name=run_name,
         )
         config = wandb.config
+    print("loop")
 
     env_config_ = EnvConfig.from_dict(config)
     training_config_defender = TrainingConfig.from_dict(config, suffix="_defender")
@@ -120,6 +121,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
     pbar = tqdm(total=(
         training_config_defender.total_steps_per_turn * training_config_defender.player_turns + training_config_attacker.total_steps_per_turn * training_config_attacker.player_turns
     ))
+    print('iteration')
 
     for turn in range(training_config_defender.player_turns):
         train_stage(
