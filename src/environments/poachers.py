@@ -125,7 +125,7 @@ class PoachersEnv(EnvironmentBase):
 
     @property
     def graph_x_size(self) -> int:
-        return 5
+        return 7
 
     @property
     def actions_mask(self) -> torch.Tensor:
@@ -193,9 +193,10 @@ class PoachersEnv(EnvironmentBase):
 
     def _get_graph_x(self, **kwargs: dict[str, torch.Tensor]) -> torch.Tensor:
         track_value = kwargs["track_value"][..., -1, :]
-        # node_features = self.map.x.clone()
+        node_features = self.map.x.clone()
         defender = torch.cat([
-            #node_features,
+            node_features[:, 0].unsqueeze(-1) / 5,
+            node_features[:, 1].unsqueeze(-1),
             self.map.reward_nodes.float().unsqueeze(-1),
             torch.where(torch.arange(self.map.num_nodes, device=self.device) == self.position[0].item(), self.nodes_prepared.float(), -1.0).unsqueeze(-1),
             torch.where(torch.arange(self.map.num_nodes, device=self.device) == self.position[0].item(), self.nodes_collected.float(), -1.0).unsqueeze(-1),
@@ -204,8 +205,8 @@ class PoachersEnv(EnvironmentBase):
         ], dim=-1)
 
         attacker = torch.cat([
-            #node_features[:, 0].unsqueeze(-1) / 10,
-            #node_features[:, 1].unsqueeze(-1),
+            node_features[:, 0].unsqueeze(-1) / 5,
+            node_features[:, 1].unsqueeze(-1),
             self.map.reward_nodes.float().unsqueeze(-1),
             torch.where(torch.arange(self.map.num_nodes, device=self.device) == self.position[1].item(), self.nodes_prepared.float(), -1.0).unsqueeze(-1),
             torch.where(torch.arange(self.map.num_nodes, device=self.device) == self.position[1].item(), self.nodes_collected.float(), -1.0).unsqueeze(-1),
