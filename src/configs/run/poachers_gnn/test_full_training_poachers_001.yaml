@@ -8,9 +8,9 @@ clip_epsilon_attacker: 0.3
 gamma_attacker: 0.93
 lmbda_attacker: 0.94
 entropy_eps_attacker: 0.005
-critic_coef_attacker:  0.25
-learning_rate_attacker: 0.005
-max_grad_norm_attacker: 0.6
+critic_coef_attacker:  0.5 # 0.25
+learning_rate_attacker: 0.001 # 0.005
+max_grad_norm_attacker: 0.3 # 0.6
 
 player_turns_defender: 10
 total_steps_per_turn_defender: 300000
@@ -22,9 +22,9 @@ clip_epsilon_defender: 0.3
 gamma_defender: 0.93
 lmbda_defender: 0.94
 entropy_eps_defender: 0.005
-critic_coef_defender:  0.25
-learning_rate_defender: 0.005
-max_grad_norm_defender: 0.6
+critic_coef_defender:  0.5 # 0.25
+learning_rate_defender: 0.001 #0.005
+max_grad_norm_defender: 0.3 # 0.6
 
 
 cls_name_backbone: GNNBackbone

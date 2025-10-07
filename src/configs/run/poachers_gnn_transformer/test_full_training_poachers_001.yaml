@@ -10,7 +10,7 @@ lmbda_attacker: 0.95
 entropy_eps_attacker: 0.005
 critic_coef_attacker:  0.45
 learning_rate_attacker: 0.001
-max_grad_norm_attacker: 0.6
+max_grad_norm_attacker: 0.3 # 0.6
 
 player_turns_defender: 10
 total_steps_per_turn_defender: 300000
@@ -24,12 +24,12 @@ lmbda_defender: 0.95
 entropy_eps_defender: 0.005
 critic_coef_defender:  0.45
 learning_rate_defender: 0.001
-max_grad_norm_defender: 0.6
+max_grad_norm_defender: 0.3 # 0.6
 
 
 cls_name_backbone: BackboneTransformer
 embedding_cls_name_backbone: GNNBackbone
-embedding_size: 36
+embedding_size: 64 # 36
 hidden_size_backbone: 64
 hidden_size_head: 64
 d_model_backbone: 320
