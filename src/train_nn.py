@@ -104,6 +104,8 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
                 "agent_config": agent_config_attacker,
                 "backbone_config": backbone_config_attacker,
                 "head_config": head_config_attacker,
+                "num_defenders": env.num_defenders,
+                "num_attackers": env.num_attackers,
             }
         ),
         num_defenders=env.num_defenders,
