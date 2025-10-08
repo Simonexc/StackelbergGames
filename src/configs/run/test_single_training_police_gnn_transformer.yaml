@@ -7,7 +7,7 @@ sub_batch_size_attacker: 512
 clip_epsilon_attacker: 0.2  # Reduced from 0.25
 gamma_attacker: 0.99
 lmbda_attacker: 0.95  # Increased from 0.92 for more stable advantage estimation
-entropy_eps_attacker: 0.01
+entropy_eps_attacker: 0.001
 critic_coef_attacker: 0.5  # Slightly increased from 0.45
 learning_rate_attacker: 0.0003  # CRITICAL: Reduced from 0.01
 max_grad_norm_attacker: 0.5  # Reduced from 0.7 for more stability
@@ -29,9 +29,10 @@ max_grad_norm_defender: 0.5  # Reduced from 0.7
 
 cls_name_backbone_attacker: BackboneTransformer
 embedding_cls_name_backbone_attacker: GNNBackbone
-embedding_size_attacker: 256
-hidden_size_backbone_attacker: 32
-hidden_size_head_attacker: 256
+embedding_size_attacker: 128
+hidden_size_backbone_attacker: 128
+num_heads_head_attacker: 6
+hidden_size_head_attacker: 128
 d_model_backbone_attacker: 256
 keys_backbone_attacker:
   x:
@@ -67,7 +68,7 @@ keys_backbone_defender:
   graph_edge_index:
     - GraphEdgeIndexExtractor
 
-num_nodes: 10
-num_steps: 20
+num_nodes: 30
+num_steps: 60
 seed: 41
 env_name: police

@@ -163,7 +163,7 @@ class PoliceEnv(EnvironmentBase):
 
         # All defenders
         defender_features = torch.stack([
-            self.map.x.squeeze(-1),  # Target rewards
+            self.map.x.squeeze(-1) / 10,  # Target rewards
             self.map.target_nodes.float(),  # Is target node
             torch.zeros(self.map.num_nodes, dtype=torch.float),  # Is hideout - defender doesn't know
             # Targets already attacked - only visible if any defender is on it
