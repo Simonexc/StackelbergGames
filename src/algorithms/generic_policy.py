@@ -279,7 +279,7 @@ class FlipItLogicModule(MapLogicModuleBase):
                     best_action = action
                 break
         # If no flip is better than observe (which is always 0), best_action_type stays 1
-        return torch.tensor(best_action, dtype=torch.int32, device=self._device)
+        return torch.tensor([best_action], dtype=torch.int32, device=self._device)
 
 
 class PoachersLogicModule(MapLogicModuleBase):
@@ -322,9 +322,9 @@ class PoachersLogicModule(MapLogicModuleBase):
         if current_distance == 0:
             # Already at not used reward node
             if nodes_prepared[position]:
-                action = torch.tensor(6, dtype=torch.int32, device=self._device)  # Collect
+                action = torch.tensor([6], dtype=torch.int32, device=self._device)  # Collect
             else:
-                action = torch.tensor(5, dtype=torch.int32, device=self._device)  # Prepare
+                action = torch.tensor([5], dtype=torch.int32, device=self._device)  # Prepare
         else:
             # Go to the nearest not used reward node
             neighbor_distances = distances[valid_neighbors]
@@ -333,7 +333,7 @@ class PoachersLogicModule(MapLogicModuleBase):
             random_index = distance_indexes[
                 torch.randint(0, len(distance_indexes), torch.Size(()), dtype=torch.int32).item()]
             neighbor = valid_neighbors[random_index].item()
-            action = (neighbors == neighbor).nonzero(as_tuple=False).reshape(torch.Size(()))
+            action = (neighbors == neighbor).nonzero(as_tuple=False).reshape(torch.Size((1,)))
 
         return action
 
