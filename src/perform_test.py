@@ -326,6 +326,8 @@ if __name__ == "__main__":
         device="cpu",
         run_name="test",
         map_logic=logic_module,
+        num_attackers=env.num_attackers,
+        num_defenders=env.num_defenders,
     )
     print("processing")
     results = compare_agent_pairs(

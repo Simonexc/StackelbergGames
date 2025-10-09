@@ -348,9 +348,11 @@ class GreedyOracleAgent(BaseAgent):
         map_logic: MapLogicModuleBase,
         total_steps: int,
         embedding_size: int,
+        num_attackers: int,
+        num_defenders: int,
         agent_id: int | None = None,
     ):
-        super().__init__(player_type, device, run_name, agent_id)
+        super().__init__(player_type, device, run_name, num_attackers=num_attackers, num_defenders=num_defenders, agent_id)
         self._map_logic = map_logic
         self._action_size = action_size
         self._total_steps = total_steps
