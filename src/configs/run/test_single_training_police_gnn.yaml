@@ -37,6 +37,8 @@ keys_backbone_attacker:
     - StepCountExtractor
     - LastActionExtractor
     - CanAttackLastExtractor
+    - AllPositionLastExtractor
+    - AllAvailableMovesLastExtractor
   graph_x:
     - GraphXExtractor
   position:
