@@ -26,15 +26,17 @@ critic_coef_defender:  0.7
 learning_rate_defender: 0.00006
 max_grad_norm_defender: 0.5
 
-embedding_size: 256
+embedding_size: 128
 cls_name_backbone: BackboneTransformer
 embedding_cls_name_backbone: GNNBackbone
-hidden_size_backbone: 256
-hidden_size_head: 256
+hidden_size_backbone: 128
+hidden_size_head: 128
 keys_backbone:
   x:
     - ActionsExtractor
     - StepCountSeqExtractor
+    - PositionSeqExtractor
+    - AvailableMovesSeqExtractor
   graph_x:
     - GraphXSeqExtractor
   position:
@@ -44,7 +46,7 @@ keys_backbone:
   graph_edge_index:
     - GraphEdgeIndexExtractor
 
-num_nodes: 20
-num_steps: 40
+num_nodes: 10
+num_steps: 20
 seed: 41
 env_name: poachers

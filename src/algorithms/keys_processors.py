@@ -213,6 +213,24 @@ class PositionLastExtractor(TensorDictKeyExtractorBase):
         return position_seq_one_hot
 
 
+class PositionSeqExtractor(TensorDictKeyExtractorBase):
+    KEY = "position_seq"
+
+    @property
+    def expected_size(self) -> int:
+        num = self._env.num_defenders if self._player_type == 0 else self._env.num_attackers
+        return (self._env.map.num_nodes + 1) * num
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        # One-Hot encode position
+        if self._player_type == 0:
+            position_seq = (value[..., :self._env.num_defenders, :] + 1).long()  # Shift actions to start from 0
+        else:
+            position_seq = (value[..., self._env.num_defenders:, :] + 1).long()  # Shift actions to start from 0
+        position_seq_one_hot = torch.nn.functional.one_hot(position_seq.transpose(-1, -2), num_classes=self._env.map.num_nodes + 1).reshape((*position_seq.shape[:-2], position_seq.shape[-1], -1)).float()
+        return position_seq_one_hot
+
+
 class AllPositionLastExtractor(TensorDictKeyExtractorBase):
     KEY = "position_seq"
 
@@ -224,6 +242,20 @@ class AllPositionLastExtractor(TensorDictKeyExtractorBase):
         # One-Hot encode position
         position_seq = (value[..., :, -1] + 1).long()  # Shift actions to start from 0
         position_seq_one_hot = torch.nn.functional.one_hot(position_seq, num_classes=self._env.map.num_nodes + 1).reshape((*position_seq.shape[:-1], -1)).float()
+        return position_seq_one_hot
+
+
+class AllPositionSeqExtractor(TensorDictKeyExtractorBase):
+    KEY = "position_seq"
+
+    @property
+    def expected_size(self) -> int:
+        return (self._env.map.num_nodes + 1) * (self._env.num_defenders + self._env.num_attackers)
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        # One-Hot encode position
+        position_seq = (value + 1).long()  # Shift actions to start from 0
+        position_seq_one_hot = torch.nn.functional.one_hot(position_seq.transpose(-1, -2), num_classes=self._env.map.num_nodes + 1).reshape((*position_seq.shape[:-2], position_seq.shape[-1], -1)).float()
         return position_seq_one_hot
 
 
@@ -321,6 +353,26 @@ class AvailableMovesLastExtractor(TensorDictKeyExtractorBase):
         return available_moves_one_hot
 
 
+class AvailableMovesSeqExtractor(TensorDictKeyExtractorBase):
+    KEY = "available_moves"
+
+    @property
+    def expected_size(self) -> int:
+        num = self._env.num_defenders if self._player_type == 0 else self._env.num_attackers
+        return (self._env.map.num_nodes + 1) * 4 * num
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        # One-Hot encode position
+        if self._player_type == 0:
+            available_moves = (value[..., :self._env.num_defenders, :, :] + 1).long()  # Shift positions to start from 0
+        else:
+            available_moves = (value[..., self._env.num_defenders:, :, :] + 1).long()  # Shift positions to start from 0
+
+        # Flatten to (batch_size, (num_nodes+1) * 4 * num)
+        available_moves_one_hot = torch.nn.functional.one_hot(available_moves.transpose(-2, -3), num_classes=self._env.map.num_nodes + 1).reshape(*available_moves.shape[:-3], available_moves.shape[-2], -1).float()
+        return available_moves_one_hot
+
+
 class AllAvailableMovesLastExtractor(TensorDictKeyExtractorBase):
     KEY = "available_moves"
 
@@ -334,6 +386,22 @@ class AllAvailableMovesLastExtractor(TensorDictKeyExtractorBase):
 
         # Flatten to (batch_size, (num_nodes+1) * 4 * num)
         available_moves_one_hot = torch.nn.functional.one_hot(available_moves, num_classes=self._env.map.num_nodes + 1).reshape(*available_moves.shape[:-2], -1).float()
+        return available_moves_one_hot
+
+
+class AllAvailableMovesSeqExtractor(TensorDictKeyExtractorBase):
+    KEY = "available_moves"
+
+    @property
+    def expected_size(self) -> int:
+        return (self._env.map.num_nodes + 1) * 4 * (self._env.num_defenders + self._env.num_attackers)
+
+    def process(self, value: torch.Tensor) -> torch.Tensor:
+        # One-Hot encode position
+        available_moves = (value + 1).long()  # Shift positions to start from 0
+
+        # Flatten to (batch_size, (num_nodes+1) * 4 * num)
+        available_moves_one_hot = torch.nn.functional.one_hot(available_moves.transpose(-2, -3), num_classes=self._env.map.num_nodes + 1).reshape(*available_moves.shape[:-3], available_moves.shape[-2], -1).float()
         return available_moves_one_hot
 
 

@@ -31,7 +31,7 @@ cls_name_backbone_attacker: BackboneTransformer
 embedding_cls_name_backbone_attacker: GNNBackbone
 embedding_size_attacker: 128
 hidden_size_backbone_attacker: 128
-num_heads_head_attacker: 6
+num_heads_backbone_attacker: 6
 hidden_size_head_attacker: 128
 d_model_backbone_attacker: 256
 keys_backbone_attacker:
@@ -39,6 +39,8 @@ keys_backbone_attacker:
     - StepCountSeqExtractor
     - ActionsExtractor
     - CanAttackSeqExtractor
+    - AllPositionSeqExtractor
+    - AllAvailableMovesSeqExtractor
   graph_x:
     - GraphXSeqExtractor
   position:
@@ -50,10 +52,10 @@ keys_backbone_attacker:
 
 cls_name_backbone_defender: BackboneTransformer
 embedding_cls_name_backbone_defender: GNNBackbone
-embedding_size_defender: 256
-hidden_size_backbone_defender: 32
+embedding_size_defender: 128
+hidden_size_backbone_defender: 128
 num_heads_head_defender: 2
-hidden_size_head_defender: 256
+hidden_size_head_defender: 128
 d_model_backbone_defender: 256
 keys_backbone_defender:
   x:
@@ -68,7 +70,7 @@ keys_backbone_defender:
   graph_edge_index:
     - GraphEdgeIndexExtractor
 
-num_nodes: 30
-num_steps: 60
+num_nodes: 10
+num_steps: 20
 seed: 41
 env_name: police

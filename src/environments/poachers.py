@@ -125,7 +125,7 @@ class PoachersEnv(EnvironmentBase):
 
     @property
     def graph_x_size(self) -> int:
-        return 7
+        return 6
 
     @property
     def actions_mask(self) -> torch.Tensor:

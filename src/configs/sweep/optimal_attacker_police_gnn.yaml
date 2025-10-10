@@ -1,4 +1,4 @@
-name: single_attacker_police_gnn
+name: single_attacker_police_gnn2
 method: bayes
 metric:
   goal: maximize
@@ -7,7 +7,7 @@ parameters:
   player_turns_attacker:
     value: 1
   total_steps_per_turn_attacker:
-    value: 300000
+    value: 400000
   epochs_per_batch_attacker:
     distribution: q_uniform
     min: 2
@@ -67,6 +67,8 @@ parameters:
         - StepCountExtractor
         - LastActionExtractor
         - CanAttackLastExtractor
+        - PositionLastExtractor
+        - AvailableMovesLastExtractor
       graph_x:
         - GraphXExtractor
       position:
@@ -101,9 +103,9 @@ parameters:
     value: 2
 
   num_nodes:
-    value: 30
+    value: 25
   num_steps:
-    value: 60
+    value: 50
   seed:
     value: 41
   env_name:
