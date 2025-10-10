@@ -111,8 +111,8 @@ class GNNBackbone(BackboneBase):
             from torch_geometric.nn.conv import GCNConv
             self.graph_conv = nn.ModuleList([
                 GCNConv(self.extractor.input_size["graph_x"], self.config.hidden_size),
-                GCNConv(self.config.hidden_size, self.config.hidden_size),
-                GCNConv(self.config.hidden_size, self.config.hidden_size),
+                #GCNConv(self.config.hidden_size, self.config.hidden_size),
+                #GCNConv(self.config.hidden_size, self.config.hidden_size),
                 GCNConv(self.config.hidden_size, self.config.hidden_size),
             ])
 

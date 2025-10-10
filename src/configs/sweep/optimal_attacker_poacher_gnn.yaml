@@ -64,6 +64,8 @@ parameters:
       x:
         - LastActionExtractor
         - StepCountExtractor
+        - PositionLastExtractor
+        - AvailableMovesLastExtractor
       graph_x:
         - GraphXExtractor
       position:

@@ -99,7 +99,7 @@ class PoliceEnv(EnvironmentBase):
 
     @property
     def graph_x_size(self) -> int:
-        return 6+self.num_defenders  # Features per node
+        return 5  # Features per node
 
     @property
     def actions_mask(self) -> torch.Tensor:
@@ -169,10 +169,10 @@ class PoliceEnv(EnvironmentBase):
             # Targets already attacked - only visible if any defender is on it
             torch.where(torch.isin(torch.arange(self.map.num_nodes, device=self.device), self.position[:-1]), self.targets_attacked.float(), -1.0),
             check_results.float(),
-        ] + [
-            (torch.arange(self.map.num_nodes, device=self.device) == self.position[i]).float() for i in range(self.num_defenders)
-        ] + [
-            torch.zeros(self.map.num_nodes, device=self.device, dtype=torch.float)  # Attacker position - defender doesn't know
+        #] + [
+        #    (torch.arange(self.map.num_nodes, device=self.device) == self.position[i]).float() for i in range(self.num_defenders)
+        #] + [
+        #    torch.zeros(self.map.num_nodes, device=self.device, dtype=torch.float)  # Attacker position - defender doesn't know
         ], dim=-1)
 
         # For attacker (player -1)
@@ -182,8 +182,8 @@ class PoliceEnv(EnvironmentBase):
             (torch.arange(self.map.num_nodes, device=self.device) == self.hideout_idx).float(),  # Is hideout
             self.targets_attacked.float(),  # Targets already attacked
             torch.zeros_like(check_results).float(),
-        ] + [
-            (torch.arange(self.map.num_nodes, device=self.device) == self.position[i]).float() for i in range(self.num_defenders + 1)
+        #] + [
+        #    (torch.arange(self.map.num_nodes, device=self.device) == self.position[i]).float() for i in range(self.num_defenders + 1)
         ], dim=-1)
 
         return torch.stack([defender_features, attacker_features], dim=-3)

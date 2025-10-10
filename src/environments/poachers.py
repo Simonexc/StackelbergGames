@@ -200,7 +200,7 @@ class PoachersEnv(EnvironmentBase):
             self.map.reward_nodes.float().unsqueeze(-1),
             torch.where(torch.arange(self.map.num_nodes, device=self.device) == self.position[0].item(), self.nodes_prepared.float(), -1.0).unsqueeze(-1),
             torch.where(torch.arange(self.map.num_nodes, device=self.device) == self.position[0].item(), self.nodes_collected.float(), -1.0).unsqueeze(-1),
-            torch.nn.functional.one_hot(torch.max(torch.zeros_like(self.position[0]), self.position[0]), num_classes=self.map.num_nodes).float().unsqueeze(-1),
+            #torch.nn.functional.one_hot(torch.max(torch.zeros_like(self.position[0]), self.position[0]), num_classes=self.map.num_nodes).float().unsqueeze(-1),
             track_value[0].float().unsqueeze(-1) / self.num_steps,
         ], dim=-1)
 
@@ -210,7 +210,7 @@ class PoachersEnv(EnvironmentBase):
             self.map.reward_nodes.float().unsqueeze(-1),
             torch.where(torch.arange(self.map.num_nodes, device=self.device) == self.position[1].item(), self.nodes_prepared.float(), -1.0).unsqueeze(-1),
             torch.where(torch.arange(self.map.num_nodes, device=self.device) == self.position[1].item(), self.nodes_collected.float(), -1.0).unsqueeze(-1),
-            torch.nn.functional.one_hot(torch.max(torch.zeros_like(self.position[1]), self.position[1]), num_classes=self.map.num_nodes).float().unsqueeze(-1),
+            #torch.nn.functional.one_hot(torch.max(torch.zeros_like(self.position[1]), self.position[1]), num_classes=self.map.num_nodes).float().unsqueeze(-1),
             track_value[1].float().unsqueeze(-1) / self.num_steps,
         ], dim=-1)
 
