@@ -1,16 +1,16 @@
 player_turns_attacker: 10
 total_steps_per_turn_attacker: 300000
 epochs_per_batch_attacker: 10
-steps_per_batch_attacker: 2048
-sub_batch_size_attacker: 512
+steps_per_batch_attacker: 2400
+sub_batch_size_attacker: 600
 
 clip_epsilon_attacker: 0.2
 gamma_attacker: 0.94
-lmbda_attacker: 0.95
-entropy_eps_attacker: 0.005
-critic_coef_attacker:  0.45
-learning_rate_attacker: 0.001
-max_grad_norm_attacker: 0.6
+lmbda_attacker: 0.93
+entropy_eps_attacker: 0.004
+critic_coef_attacker:  0.64
+learning_rate_attacker: 0.003
+max_grad_norm_attacker: 0.24
 
 player_turns_defender: 10
 total_steps_per_turn_defender: 300000
@@ -20,20 +20,20 @@ sub_batch_size_defender: 600
 
 clip_epsilon_defender: 0.2
 gamma_defender: 0.94
-lmbda_defender: 0.95
-entropy_eps_defender: 0.005
-critic_coef_defender:  0.45
-learning_rate_defender: 0.001
-max_grad_norm_defender: 0.6
+lmbda_defender: 0.93
+entropy_eps_defender: 0.004
+critic_coef_defender:  0.64
+learning_rate_defender: 0.003
+max_grad_norm_defender: 0.24
 
 
 cls_name_backbone: BackboneTransformer
 embedding_cls_name_backbone: GNNBackbone
-embedding_size: 36
-hidden_size_backbone: 64
-hidden_size_head: 64
-d_model_backbone: 320
-num_head_backbone: 6
+embedding_size: 64
+hidden_size_backbone: 25
+hidden_size_head: 20
+d_model_backbone: 60
+num_head_backbone: 4
 keys_backbone:
   x:
     - ActionsExtractor
