@@ -44,6 +44,7 @@ cls_name_backbone_defender: Backbone
 embedding_size_defender: 180
 hidden_size_backbone_defender: 70
 hidden_size_head_defender: 64
+num_heads_head_defender: 2
 keys_backbone_defender:
   x:
     - StepCountExtractor
@@ -56,4 +57,4 @@ keys_backbone_defender:
 num_nodes: 40
 num_steps: 80
 seed: 41
-env_name: poachers
+env_name: police
