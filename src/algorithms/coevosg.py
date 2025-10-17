@@ -112,16 +112,21 @@ class PureStrategy(StrategyBase):
     def __init__(self, action_size: int, pure_strategy: torch.Tensor, env: EnvironmentBase, player: Player) -> None:
         super().__init__()
         self.action_size = action_size
-        self.pure_strategy = pure_strategy
+        self.pure_strategy = pure_strategy  # Shape: (num_steps, num_heads)
         self.fitness = -float("inf")
         self.player = player
         self.env = env
+        # Handle both (num_steps,) and (num_steps, num_heads) shapes
+        if self.pure_strategy.ndim == 1:
+            self.pure_strategy = self.pure_strategy.unsqueeze(-1)
+        self.num_heads = self.pure_strategy.shape[1]
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
-        action = self.pure_strategy[tensordict["step_count"].item()].unsqueeze(-1)
-        logits = torch.zeros((*action.shape, self.action_size), dtype=torch.float32, device=tensordict.device)
-        logits[torch.arange(0, action.shape[-1]), action] = 1.0
-        sample_log_prob = torch.zeros_like(action, dtype=torch.float32, device=tensordict.device)
+        action = self.pure_strategy[tensordict["step_count"].item()]  # Shape: (num_heads,)
+        # Create logits: (num_heads, action_size)
+        logits = torch.zeros((self.num_heads, self.action_size), dtype=torch.float32, device=tensordict.device)
+        logits[torch.arange(self.num_heads), action] = 1.0
+        sample_log_prob = torch.zeros(self.num_heads, dtype=torch.float32, device=tensordict.device)
         embedding = torch.zeros(32, dtype=torch.float32, device=tensordict.device)
 
         tensordict.update({
@@ -137,12 +142,22 @@ class PureStrategy(StrategyBase):
 
     def mutate(self) -> None:
         mutation_point = torch.randint(0, len(self.pure_strategy), torch.Size(())).item()
-        belief_state = belief_state_class(self.env).from_actions_history(player=self.player, env=self.env, device=self.pure_strategy.device, actions=self.pure_strategy[:mutation_point].tolist())
+        # Create separate belief states for each head
+        belief_states = [
+            belief_state_class(self.env).from_actions_history(
+                player=self.player,
+                env=self.env,
+                device=self.pure_strategy.device,
+                actions=self.pure_strategy[:mutation_point, head_idx].tolist()
+            )
+            for head_idx in range(self.num_heads)
+        ]
         for step in range(mutation_point, len(self.pure_strategy)):
-            actions = belief_state.available_actions()
-            action = random.choice(actions)
-            belief_state.update_belief(action)
-            self.pure_strategy[step] = action
+            for head_idx in range(self.num_heads):
+                actions = belief_states[head_idx].available_actions()
+                action = random.choice(actions)
+                belief_states[head_idx].update_belief(action)
+                self.pure_strategy[step, head_idx] = action
 
     def crossover(self, other: "StrategyBase") -> tuple["StrategyBase", "StrategyBase"]:
         if not isinstance(other, PureStrategy):
@@ -153,15 +168,15 @@ class PureStrategy(StrategyBase):
 
         # One-point crossover for attacker pure strategies.
         if strat1.shape != strat2.shape:
-            raise ValueError("Strategy lengths differ")
+            raise ValueError("Strategy shapes differ")
 
         if len(strat1) < 2:
             return PureStrategy(self.action_size, strat1.clone(), self.env, self.player), PureStrategy(self.action_size, strat2.clone(), self.env, self.player)
 
-        # Simple one-point crossover
+        # Simple one-point crossover (preserves all heads)
         crossover_point = torch.randint(0, len(self.pure_strategy), torch.Size(())).item()
-        child1_strategy = torch.cat((self.pure_strategy[:crossover_point], other.pure_strategy[crossover_point:]))
-        child2_strategy = torch.cat((other.pure_strategy[:crossover_point], self.pure_strategy[crossover_point:]))
+        child1_strategy = torch.cat((self.pure_strategy[:crossover_point], other.pure_strategy[crossover_point:]), dim=0)
+        child2_strategy = torch.cat((other.pure_strategy[:crossover_point], self.pure_strategy[crossover_point:]), dim=0)
 
         return PureStrategy(self.action_size, child1_strategy, self.env, self.player), PureStrategy(self.action_size, child2_strategy, self.env, self.player)
 
@@ -213,18 +228,23 @@ class PureStrategy(StrategyBase):
     def load(self, path: str) -> None:
         data = torch.load(path)
         self.pure_strategy = data["pure_strategy"]
+        # Handle both old (1D) and new (2D) formats
+        if self.pure_strategy.ndim == 1:
+            self.pure_strategy = self.pure_strategy.unsqueeze(-1)
+        self.num_heads = self.pure_strategy.shape[1]
         self.fitness = data["fitness"]
 
     def to_simple_data(self) -> dict:
         return {
             "type": "pure",
-            "strategy": self.pure_strategy.tolist(),
+            "strategy": self.pure_strategy.tolist(),  # Will be 2D list: (num_steps, num_heads)
             "fitness": self.fitness,
         }
 
     @classmethod
     def from_simple_data(cls, data: dict, action_size: int, env: EnvironmentBase, player: Player) -> "PureStrategy":
-        strategy = cls(action_size, torch.tensor(data["strategy"], dtype=torch.int32), env, player)
+        strategy_tensor = torch.tensor(data["strategy"], dtype=torch.int32)
+        strategy = cls(action_size, strategy_tensor, env, player)
         strategy.fitness = data["fitness"]
         return strategy
 
@@ -238,6 +258,7 @@ class MixedStrategy(StrategyBase):
         assert len(pure_strategies) > 0
         self.env = pure_strategies[0].env
         self.player = pure_strategies[0].player
+        self.num_heads = pure_strategies[0].num_heads
         # self.pure_strategy_generator = StrategyGenerator(action_size, PureStrategy)
 
         if len(pure_strategies) != len(probabilities):
@@ -336,15 +357,16 @@ class MixedStrategy(StrategyBase):
             return
 
         # --- Merge Duplicates ---
-        # Convert pure strategies to tuples for hashing
-        strategy_map: dict[tuple[int, ...], float] = {}
+        # Convert pure strategies to tuples for hashing (handle 2D structure)
+        strategy_map: dict[tuple, float] = {}
         for i, pure_strat in enumerate(self.pure_strategies):
-            strat_tuple = tuple(pure_strat.pure_strategy.tolist())
+            # Convert 2D tensor (num_steps, num_heads) to nested tuple
+            strat_tuple = tuple(tuple(row.tolist()) for row in pure_strat.pure_strategy)
             current_prob = strategy_map.get(strat_tuple, 0.0)
             strategy_map[strat_tuple] = current_prob + self.probabilities[i]
 
         # --- Filter by Probability Threshold ---
-        filtered_strategies_tuples: list[tuple[int,...]] = []
+        filtered_strategies_tuples: list[tuple] = []
         filtered_probabilities: list[float] = []
         for strat_tuple, prob in strategy_map.items():
             if prob >= min_prob_threshold:
@@ -432,6 +454,7 @@ class MixedStrategy(StrategyBase):
             self.pure_strategies.append(PureStrategy(self.action_size, strategy, self.env, self.player))
         self.probabilities = data["probabilities"].tolist()
         self.fitness = data["fitness"]
+        self.num_heads = self.pure_strategies[0].num_heads if self.pure_strategies else 1
 
     def to_simple_data(self) -> dict:
         return {
@@ -502,6 +525,7 @@ class CoevoSGAgentBase(BaseAgent, ABC):
         pop_size: int = 200,
         agent_id: int | None = None,
         pool: multiprocessing.pool.Pool | None = None,
+        num_heads: int = 1,
     ) -> None:
         super().__init__(player_type, device, run_name, num_attackers=env.num_attackers, num_defenders=env.num_defenders, agent_id=agent_id)
 
@@ -511,6 +535,7 @@ class CoevoSGAgentBase(BaseAgent, ABC):
         self.pop_size = pop_size
         self.env = env
         self.pool = pool
+        self.num_heads = num_heads
 
         self.population: list[StrategyBase] = []
         self.generations_no_improvement = 0
@@ -665,14 +690,14 @@ class CoevoSGDefenderAgent(CoevoSGAgentBase):
 
         self.population = []
         for _ in range(self.pop_size):
-            pure_strategy = generate_random_pure_strategy(Player(self.player_type), self.env)
+            pure_strategy = generate_random_pure_strategy(Player(self.player_type), self.env, self.num_heads)
             self.population.append(MixedStrategy(self.action_size, [PureStrategy(self.action_size, pure_strategy, self.env, Player(self.player_type))], [1.0]))
 
     def load(self, path: str) -> None:
         """
         Load the best strategy from disk.
         """
-        self.population = [MixedStrategy(self.action_size, [PureStrategy(self.action_size, torch.tensor([]), self.env, Player(self.player_type))], [1.0])]
+        self.population = [MixedStrategy(self.action_size, [PureStrategy(self.action_size, torch.zeros((self.env.num_steps, self.num_heads), dtype=torch.int32), self.env, Player(self.player_type))], [1.0])]
         self.best_population.load(path)
 
 
@@ -687,12 +712,12 @@ class CoevoSGAttackerAgent(CoevoSGAgentBase):
 
         self.population = []
         for _ in range(self.pop_size):
-            pure_strategy = generate_random_pure_strategy(Player(self.player_type), self.env)
+            pure_strategy = generate_random_pure_strategy(Player(self.player_type), self.env, self.num_heads)
             self.population.append(PureStrategy(self.action_size, pure_strategy, self.env, Player(self.player_type)))
 
     def load(self, path: str) -> None:
         """
         Load the best strategy from disk.
         """
-        self.population = [PureStrategy(self.action_size, torch.tensor([]), self.env, Player(self.player_type))]
+        self.population = [PureStrategy(self.action_size, torch.zeros((self.env.num_steps, self.num_heads), dtype=torch.int32), self.env, Player(self.player_type))]
         self.best_population.load(path)

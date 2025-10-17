@@ -2,6 +2,7 @@ import argparse
 import multiprocessing
 import yaml
 from datetime import datetime
+import uuid
 import os
 
 import torch
@@ -13,7 +14,7 @@ from environments.poachers import PoachersEnv
 from environments.police import PoliceEnv
 from algorithms.generic_policy import CombinedPolicy
 from algorithms.coevosg import CoevoSGAttackerAgent, CoevoSGDefenderAgent, StrategyBase
-from config import EnvConfig, CoevoSGConfig
+from config import EnvConfig, CoevoSGConfig, HeadConfig
 from utils import train_stage_coevosg
 
 
@@ -36,6 +37,8 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
 
     env_config_ = EnvConfig.from_dict(config)
     coevosg_config = CoevoSGConfig.from_dict(config)
+    attacker_head = HeadConfig.from_dict(config, suffix="_head_attacker")
+    defender_head = HeadConfig.from_dict(config, suffix="_head_defender")
 
     env_map, env = env_config_.create("cpu")
     if isinstance(env, PoachersEnv) or isinstance(env, PoliceEnv):
@@ -51,6 +54,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
             config=coevosg_config,
             env=env,
             pool=pool,
+            num_heads=defender_head.num_heads,
         )
         attacker_agent = CoevoSGAttackerAgent(
             device=device,
@@ -58,6 +62,7 @@ def training_loop(device: torch.device, cpu_cores: int, run_name: str | None = N
             config=coevosg_config,
             env=env,
             pool=pool,
+            num_heads=attacker_head.num_heads,
         )
 
         combined_policy = CombinedPolicy(
@@ -128,7 +133,7 @@ if __name__ == "__main__":
     with open(args.config, "r") as file:
         config_content = yaml.safe_load(file)
 
-    run_name_ = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-full-coevosg-{args.name}'
+    run_name_ = f'{datetime.now().strftime("%Y-%m-%d_%H:%M:%S")}-full-coevosg-{uuid.uuid4().hex[:8]}{args.name}'
     with wandb.init(
         entity=env_config["WANDB_ENTITY"],
         project=env_config["WANDB_PROJECT"],

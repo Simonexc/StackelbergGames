@@ -338,6 +338,59 @@ class PoachersLogicModule(MapLogicModuleBase):
         return action
 
 
+class PoliceLogicModule(MapLogicModuleBase):
+    def _distances_to_nearest_reward(self, targets_attacked: torch.Tensor) -> torch.Tensor:
+        final_distances = torch.full((self._env_map.num_nodes,), float('inf'), dtype=torch.float32,
+                                     device=self._device)
+
+        nodes = torch.where(~targets_attacked & self._env_map.target_nodes)[0].tolist()
+        distances = [0] * len(nodes)
+        visited: set[int] = set()
+
+        while nodes:
+            current_node = nodes.pop(0)
+            distance = distances.pop(0)
+            if current_node in visited or distance >= final_distances[current_node].item():
+                continue
+            visited.add(current_node)
+            final_distances[current_node] = distance
+
+            neighbors = self._env_map.get_neighbors(
+                torch.tensor([current_node], dtype=torch.int32, device=self._device)
+            ).squeeze(0).cpu().tolist()
+            for neighbor in neighbors:
+                if neighbor != -1 and neighbor not in visited:
+                    distances.append(distance + 1)
+                    nodes.append(neighbor)
+
+        return final_distances
+
+    def get_action(self, tensordict: TensorDictBase) -> torch.Tensor:
+        assert self._player_type == 1, "PoliceLogicModule is only implemented for attackers."
+        targets_attacked = tensordict["targets_attacked_obs"][..., 1, -1, :].to(torch.bool)
+        position = tensordict["position_seq"][self._player_type, -1].item()
+
+        neighbors = self._env_map.get_neighbors(
+            torch.tensor([position], dtype=torch.int32, device=self._device)).squeeze(0)
+        valid_neighbors = neighbors[neighbors != -1]
+        distances = self._distances_to_nearest_reward(targets_attacked)
+        current_distance = distances[position].item()
+        if current_distance == 0:
+            # Already at not used reward node
+            action = torch.tensor([4], dtype=torch.int32, device=self._device)  # Attack
+        else:
+            # Go to the nearest not used reward node
+            neighbor_distances = distances[valid_neighbors]
+            min_distance = neighbor_distances.min().item()
+            distance_indexes = (neighbor_distances == min_distance).nonzero(as_tuple=False).squeeze(-1)
+            random_index = distance_indexes[
+                torch.randint(0, len(distance_indexes), torch.Size(()), dtype=torch.int32).item()]
+            neighbor = valid_neighbors[random_index].item()
+            action = (neighbors == neighbor).nonzero(as_tuple=False).reshape(torch.Size((1,)))
+
+        return action
+
+
 class GreedyOracleAgent(BaseAgent):
     def __init__(
         self,

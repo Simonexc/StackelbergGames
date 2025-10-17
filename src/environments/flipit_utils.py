@@ -9,6 +9,7 @@ from .base_env import EnvironmentBase
 from .base_map import EnvMapBase
 from .flipit_geometric import FlipItEnv, FlipItMap
 from .poachers import PoachersEnv, PoachersMap
+from .police import PoliceEnv, PoliceMap
 from config import Player
 
 
@@ -195,11 +196,57 @@ class PoachersBeliefState(BeliefStateBase):
         return instance
 
 
+class PoliceBeliefState(BeliefStateBase):
+    def __init__(self, player: Player, env: PoliceEnv, device: torch.device) -> None:
+        super().__init__(player, env, device)
+
+        assert isinstance(env, PoliceEnv), "PoliceBeliefState can only be used with PoliceEnv."
+        self.pos = env.position[player.value]
+        self.attacked = env.targets_attacked.clone()
+
+    def update_belief(self, action: int) -> None:
+        if action < 4:
+            self.pos = self.env.map.get_neighbors(torch.tensor([self.pos], device=self.env.device))[0, action]
+        elif action == 4 and not self.attacked[self.pos] and self.env.map.target_nodes[self.pos]:
+            self.attacked[self.pos] = True
+
+    def available_actions(self) -> list[int]:
+        """
+        Get a list of available actions for the player.
+
+        Returns:
+            list[int]: A list of available actions.
+        """
+        actions = []
+        neighbors = self.env.map.get_neighbors(torch.tensor([self.pos], device=self.env.device))[0]
+        for i, neighbor in enumerate(neighbors):
+            if neighbor != -1:
+                actions.append(i)
+        if self.player == Player.attacker and self.env.map.target_nodes[self.pos] and not self.attacked[self.pos]:
+            actions.append(4)
+        elif self.player == Player.defender:
+            actions.append(4)
+            for i, neighbor in enumerate(neighbors):
+                if neighbor != -1:
+                    actions.append(i + 5)
+
+        return actions
+
+    @classmethod
+    def from_actions_history(cls, player: Player, env: PoliceEnv, actions: list[int], device: str | torch.device) -> "PoliceBeliefState":
+        instance = cls(player, env, device)
+        for action in actions:
+            instance.update_belief(action)
+        return instance
+
+
 def belief_state_class(env: EnvironmentBase | EnvMapBase) -> Type[BeliefStateBase]:
     if isinstance(env, FlipItEnv) or isinstance(env, FlipItMap):
         return FlipItBeliefState
     elif isinstance(env, PoachersEnv) or isinstance(env, PoachersMap):
         return PoachersBeliefState
+    elif isinstance(env, PoliceEnv) or isinstance(env, PoliceMap):
+        return PoliceBeliefState
     else:
         raise ValueError(f"Unsupported environment type: {type(env)}")
 
@@ -227,23 +274,29 @@ def belief_state_class(env: EnvironmentBase | EnvMapBase) -> Type[BeliefStateBas
 #     return torch.tensor(pure_strategy, dtype=torch.int32)
 
 
-def generate_random_pure_strategy(player: Player, env: EnvironmentBase) -> torch.Tensor:
+def generate_random_pure_strategy(player: Player, env: EnvironmentBase, num_heads: int = 1) -> torch.Tensor:
     """
-    Generate a random pure strategy for the FlipIt game.
+    Generate a random pure strategy for the game.
 
     Args:
-        num_steps (int): Number of steps in the game.
-        num_nodes (int): Number of nodes in the game graph.
+        player (Player): The player for which to generate the strategy.
+        env (EnvironmentBase): The environment.
+        num_heads (int): Number of actions per timestep (default: 1).
 
     Returns:
-        list[ActionTargetPair]: A list of action-target pairs representing the pure strategy.
+        torch.Tensor: A tensor of shape (num_steps, num_heads).
     """
 
-    pure_strategy: list[int] = []
-    belief_state = belief_state_class(env)(player, env, env.device)
+    pure_strategy: list[list[int]] = []
+    # Create separate belief states for each head
+    belief_states = [belief_state_class(env)(player, env, env.device) for _ in range(num_heads)]
+
     for step in range(env.num_steps):
-        action = random.choice(belief_state.available_actions())
-        pure_strategy.append(action)
-        belief_state.update_belief(action)
+        step_actions = []
+        for head_idx in range(num_heads):
+            action = random.choice(belief_states[head_idx].available_actions())
+            step_actions.append(action)
+            belief_states[head_idx].update_belief(action)
+        pure_strategy.append(step_actions)
 
     return torch.tensor(pure_strategy, dtype=torch.int32)

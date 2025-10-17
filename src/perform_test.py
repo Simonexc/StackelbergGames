@@ -14,7 +14,7 @@ from algorithms.generic_policy import MultiAgentPolicy
 from algorithms.generator import AgentGenerator
 from algorithms.keys_processors import CombinedExtractor
 from environments.env_mapper import EnvMapper
-from algorithms.generic_policy import RandomAgent, GreedyOracleAgent, PoachersLogicModule, FlipItLogicModule
+from algorithms.generic_policy import RandomAgent, GreedyOracleAgent, PoachersLogicModule, FlipItLogicModule, PoliceLogicModule
 from utils import compare_agent_pairs
 import wandb
 import tempfile
@@ -306,6 +306,8 @@ if __name__ == "__main__":
         logic_module = FlipItLogicModule(env=env, player_type=1, total_steps=env.num_steps, device="cpu")
     elif env_config.env_name == "poachers":
         logic_module = PoachersLogicModule(env=env, player_type=1, total_steps=env.num_steps, device="cpu")
+    elif env_config.env_name == "police":
+        logic_module = PoliceLogicModule(env=env, player_type=1, total_steps=env.num_steps, device="cpu")
     else:
         raise ValueError(f"Unknown environment name: {env_config.env_name}")
 

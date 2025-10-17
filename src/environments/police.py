@@ -254,7 +254,8 @@ class PoliceEnv(EnvironmentBase):
             new_positions = move_positions[torch.arange(move_positions.shape[0]), move_actions]
             self.position[move_mask] = new_positions
             if (self.position == -1).any():
-                raise ValueError(f"Invalid action detected: {actions}")
+                # raise ValueError(f"Invalid action detected: {actions}")
+                rewards[self.position == -1] -= 100.0
 
         if self.position[-1] == self.hideout_idx and not self.can_attack:
             self.can_attack = True
@@ -274,8 +275,8 @@ class PoliceEnv(EnvironmentBase):
                 self.can_attack = False
                 self.currently_holding_reward = self.map.x[self.position[-1], 0].item()
             else:
-                raise ValueError(f"Invalid attack action detected: {actions}")
-                # rewards[..., -1] -= 100.0
+                # raise ValueError(f"Invalid attack action detected: {actions}")
+                rewards[..., -1] -= 100.0
 
         # Arrest
         arrest_mask = (4 <= actions) & (actions < 9)
