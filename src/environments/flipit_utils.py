@@ -230,6 +230,9 @@ class PoliceBeliefState(BeliefStateBase):
                 if neighbor != -1:
                     actions.append(i + 5)
 
+        if not actions:
+            actions.append(0)  # We must always have at least one action
+
         return actions
 
     @classmethod
