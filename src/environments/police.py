@@ -255,7 +255,10 @@ class PoliceEnv(EnvironmentBase):
             self.position[move_mask] = new_positions
             if (self.position == -1).any():
                 # raise ValueError(f"Invalid action detected: {actions}")
-                rewards[self.position == -1] -= 100.0
+                if (self.position == -1)[:self.num_defenders].any():
+                    rewards[0] -= 100.0
+                if (self.position == -1)[self.num_defenders:].any():
+                    rewards[1] -= 100.0
 
         if self.position[-1] == self.hideout_idx and not self.can_attack:
             self.can_attack = True
@@ -286,7 +289,8 @@ class PoliceEnv(EnvironmentBase):
             possible_arrest_positions = torch.cat([self.position[arrest_mask].unsqueeze(-1), self.map.get_neighbors(self.position[arrest_mask])], dim=-1)
             arrest_positions = possible_arrest_positions[torch.arange(possible_arrest_positions.shape[0]), arrest_actions - 4]
             if (arrest_positions == -1).any():
-                raise ValueError(f"Invalid arrest action detected: {actions}")
+                rewards[0] -= 100.0
+                #raise ValueError(f"Invalid arrest action detected: {actions}")
             else:
                 if (self.position[-1] == arrest_positions).any():
                     # Caught the attacker!
@@ -304,7 +308,8 @@ class PoliceEnv(EnvironmentBase):
             possible_check_positions = torch.cat([self.position[check_mask].unsqueeze(-1), self.map.get_neighbors(self.position[check_mask])], dim=-1)
             check_positions = possible_check_positions[torch.arange(possible_check_positions.shape[0]), check_actions - 9]
             if (check_positions == -1).any():
-                raise ValueError(f"Invalid check action detected: {actions}")
+                #raise ValueError(f"Invalid check action detected: {actions}")
+                rewards[0] -= 100.0
             else:
                 check_results[check_positions] = torch.isin(check_positions, self.attacker_history[max(0, self.step_count - self.see_past_points+1):self.step_count+1]).int()
 
