@@ -22,7 +22,7 @@ import tempfile
 
 if __name__ == "__main__":
     dot_env_config = dotenv_values("../.env")
-    cpu_cores = min(12, multiprocessing.cpu_count())
+    cpu_cores = min(6, multiprocessing.cpu_count())
     device = (
         torch.device(0)
         if torch.cuda.is_available()
