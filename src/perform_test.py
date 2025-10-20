@@ -255,9 +255,9 @@ if __name__ == "__main__":
     gnn_transformer_training_config_attacker = TrainingConfig.from_dict(gnn_transformer_config, suffix="_attacker")
     gnn_transformer_loss_config_attacker = LossConfig.from_dict(gnn_transformer_config, suffix="_attacker")
     try:
-        gnn_transformer_agent_config = AgentNNConfig.from_dict(gnn_config)
-        gnn_transformer_backbone_config = BackboneConfig.from_dict(gnn_config, suffix=f"_backbone")
-        gnn_transformer_head_config = HeadConfig.from_dict(gnn_config, suffix=f"_head")
+        gnn_transformer_agent_config = AgentNNConfig.from_dict(gnn_transformer_config)
+        gnn_transformer_backbone_config = BackboneConfig.from_dict(gnn_transformer_config, suffix=f"_backbone")
+        gnn_transformer_head_config = HeadConfig.from_dict(gnn_transformer_config, suffix=f"_head")
 
         gnn_transformer_agent_config_attacker = gnn_transformer_agent_config
         gnn_transformer_agent_config_defender = gnn_transformer_agent_config
