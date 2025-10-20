@@ -92,11 +92,26 @@ if __name__ == "__main__":
     nn_loss_config_defender = LossConfig.from_dict(nn_config, suffix="_defender")
     nn_training_config_attacker = TrainingConfig.from_dict(nn_config, suffix="_attacker")
     nn_loss_config_attacker = LossConfig.from_dict(nn_config, suffix="_attacker")
-    nn_agent_config = AgentNNConfig.from_dict(nn_config)
-    nn_backbone_config = BackboneConfig.from_dict(nn_config, suffix=f"_backbone")
-    nn_head_config = HeadConfig.from_dict(nn_config, suffix=f"_head")
+    try:
+        nn_agent_config = AgentNNConfig.from_dict(nn_config)
+        nn_backbone_config = BackboneConfig.from_dict(nn_config, suffix=f"_backbone")
+        nn_head_config = HeadConfig.from_dict(nn_config, suffix=f"_head")
 
-    nn_defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=nn_backbone_config.extractors)
+        nn_agent_config_attacker = nn_agent_config
+        nn_agent_config_defender = nn_agent_config
+        nn_backbone_config_attacker = nn_backbone_config
+        nn_backbone_config_defender = nn_backbone_config
+        nn_head_config_attacker = nn_head_config
+        nn_head_config_defender = nn_head_config
+    except TypeError:  # HACK: means that we have separate configs for attacker and defender
+        nn_agent_config_attacker = AgentNNConfig.from_dict(nn_config, suffix="_attacker")
+        nn_agent_config_defender = AgentNNConfig.from_dict(nn_config, suffix="_defender")
+        nn_backbone_config_attacker = BackboneConfig.from_dict(nn_config, suffix="_backbone_attacker")
+        nn_backbone_config_defender = BackboneConfig.from_dict(nn_config, suffix="_backbone_defender")
+        nn_head_config_attacker = HeadConfig.from_dict(nn_config, suffix="_head_attacker")
+        nn_head_config_defender = HeadConfig.from_dict(nn_config, suffix="_head_defender")
+
+    nn_defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=nn_backbone_config_defender.extractors)
     nn_defender_agent = TrainableNNAgentPolicy(
         player_type=0,
         max_sequence_size=env_config.num_steps + 1,
@@ -106,9 +121,9 @@ if __name__ == "__main__":
         device=device,
         loss_config=nn_loss_config_defender,
         training_config=nn_training_config_defender,
-        agent_config=nn_agent_config,
-        backbone_config=nn_backbone_config,
-        head_config=nn_head_config,
+        agent_config=nn_agent_config_defender,
+        backbone_config=nn_backbone_config_defender,
+        head_config=nn_head_config_defender,
         run_name="test",
         add_logs=False,  # No logs during testing
         num_attackers=env.num_attackers,
@@ -117,13 +132,13 @@ if __name__ == "__main__":
     nn_defender_agent.eval()
     nn_defender_agent.load(os.path.join(nn_model_path, "defender", "agent_0.pth"))
 
-    nn_attacker_extractor = CombinedExtractor(player_type=1, env=env, actions_map=nn_backbone_config.extractors)
+    nn_attacker_extractor = CombinedExtractor(player_type=1, env=env, actions_map=nn_backbone_config_attacker.extractors)
     nn_attacker_agent = MultiAgentPolicy(
         action_size=env.action_size,
         player_type=1,
         device=device,
         run_name="test",
-        embedding_size=nn_agent_config.embedding_size,
+        embedding_size=nn_agent_config_attacker.embedding_size,
         policy_generator=AgentGenerator(
             TrainableNNAgentPolicy,
             {
@@ -137,9 +152,9 @@ if __name__ == "__main__":
                 "training_config": nn_training_config_attacker,
                 "run_name": "test",
                 "add_logs": False,  # No logs during testing
-                "agent_config": nn_agent_config,
-                "backbone_config": nn_backbone_config,
-                "head_config": nn_head_config,
+                "agent_config": nn_agent_config_attacker,
+                "backbone_config": nn_backbone_config_attacker,
+                "head_config": nn_head_config_attacker,
                 "num_attackers": env.num_attackers,
                 "num_defenders": env.num_defenders,
             }
@@ -158,11 +173,26 @@ if __name__ == "__main__":
     gnn_loss_config_defender = LossConfig.from_dict(gnn_config, suffix="_defender")
     gnn_training_config_attacker = TrainingConfig.from_dict(gnn_config, suffix="_attacker")
     gnn_loss_config_attacker = LossConfig.from_dict(gnn_config, suffix="_attacker")
-    gnn_agent_config = AgentNNConfig.from_dict(gnn_config)
-    gnn_backbone_config = BackboneConfig.from_dict(gnn_config, suffix=f"_backbone")
-    gnn_head_config = HeadConfig.from_dict(gnn_config, suffix=f"_head")
+    try:
+        gnn_agent_config = AgentNNConfig.from_dict(gnn_config)
+        gnn_backbone_config = BackboneConfig.from_dict(gnn_config, suffix=f"_backbone")
+        gnn_head_config = HeadConfig.from_dict(gnn_config, suffix=f"_head")
 
-    gnn_defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=gnn_backbone_config.extractors)
+        gnn_agent_config_attacker = gnn_agent_config
+        gnn_agent_config_defender = gnn_agent_config
+        gnn_backbone_config_attacker = gnn_backbone_config
+        gnn_backbone_config_defender = gnn_backbone_config
+        gnn_head_config_attacker = gnn_head_config
+        gnn_head_config_defender = gnn_head_config
+    except TypeError:  # HACK: means that we have separate configs for attacker and defender
+        gnn_agent_config_attacker = AgentNNConfig.from_dict(gnn_config, suffix="_attacker")
+        gnn_agent_config_defender = AgentNNConfig.from_dict(gnn_config, suffix="_defender")
+        gnn_backbone_config_attacker = BackboneConfig.from_dict(gnn_config, suffix="_backbone_attacker")
+        gnn_backbone_config_defender = BackboneConfig.from_dict(gnn_config, suffix="_backbone_defender")
+        gnn_head_config_attacker = HeadConfig.from_dict(gnn_config, suffix="_head_attacker")
+        gnn_head_config_defender = HeadConfig.from_dict(gnn_config, suffix="_head_defender")
+
+    gnn_defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=gnn_backbone_config_defender.extractors)
     gnn_defender_agent = TrainableNNAgentPolicy(
         player_type=0,
         max_sequence_size=env_config.num_steps + 1,
@@ -172,9 +202,9 @@ if __name__ == "__main__":
         device=device,
         loss_config=gnn_loss_config_defender,
         training_config=gnn_training_config_defender,
-        agent_config=gnn_agent_config,
-        backbone_config=gnn_backbone_config,
-        head_config=gnn_head_config,
+        agent_config=gnn_agent_config_defender,
+        backbone_config=gnn_backbone_config_defender,
+        head_config=gnn_head_config_defender,
         run_name="test",
         add_logs=False,  # No logs during testing
         num_attackers=env.num_attackers,
@@ -183,13 +213,13 @@ if __name__ == "__main__":
     gnn_defender_agent.eval()
     gnn_defender_agent.load(os.path.join(gnn_model_path, "defender", "agent_0.pth"))
 
-    gnn_attacker_extractor = CombinedExtractor(player_type=1, env=env, actions_map=gnn_backbone_config.extractors)
+    gnn_attacker_extractor = CombinedExtractor(player_type=1, env=env, actions_map=gnn_backbone_config_attacker.extractors)
     gnn_attacker_agent = MultiAgentPolicy(
         action_size=env.action_size,
         player_type=1,
         device=device,
         run_name="test",
-        embedding_size=gnn_agent_config.embedding_size,
+        embedding_size=gnn_agent_config_attacker.embedding_size,
         policy_generator=AgentGenerator(
             TrainableNNAgentPolicy,
             {
@@ -203,9 +233,9 @@ if __name__ == "__main__":
                 "training_config": gnn_training_config_attacker,
                 "run_name": "test",
                 "add_logs": False,  # No logs during testing
-                "agent_config": gnn_agent_config,
-                "backbone_config": gnn_backbone_config,
-                "head_config": gnn_head_config,
+                "agent_config": gnn_agent_config_attacker,
+                "backbone_config": gnn_backbone_config_attacker,
+                "head_config": gnn_head_config_attacker,
                 "num_attackers": env.num_attackers,
                 "num_defenders": env.num_defenders,
             }
@@ -224,11 +254,26 @@ if __name__ == "__main__":
     gnn_transformer_loss_config_defender = LossConfig.from_dict(gnn_transformer_config, suffix="_defender")
     gnn_transformer_training_config_attacker = TrainingConfig.from_dict(gnn_transformer_config, suffix="_attacker")
     gnn_transformer_loss_config_attacker = LossConfig.from_dict(gnn_transformer_config, suffix="_attacker")
-    gnn_transformer_agent_config = AgentNNConfig.from_dict(gnn_transformer_config)
-    gnn_transformer_backbone_config = BackboneConfig.from_dict(gnn_transformer_config, suffix=f"_backbone")
-    gnn_transformer_head_config = HeadConfig.from_dict(gnn_transformer_config, suffix=f"_head")
+    try:
+        gnn_transformer_agent_config = AgentNNConfig.from_dict(gnn_config)
+        gnn_transformer_backbone_config = BackboneConfig.from_dict(gnn_config, suffix=f"_backbone")
+        gnn_transformer_head_config = HeadConfig.from_dict(gnn_config, suffix=f"_head")
 
-    gnn_transformer_defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=gnn_transformer_backbone_config.extractors)
+        gnn_transformer_agent_config_attacker = gnn_transformer_agent_config
+        gnn_transformer_agent_config_defender = gnn_transformer_agent_config
+        gnn_transformer_backbone_config_attacker = gnn_transformer_backbone_config
+        gnn_transformer_backbone_config_defender = gnn_transformer_backbone_config
+        gnn_transformer_head_config_attacker = gnn_transformer_head_config
+        gnn_transformer_head_config_defender = gnn_transformer_head_config
+    except TypeError:  # HACK: means that we have separate configs for attacker and defender
+        gnn_transformer_agent_config_attacker = AgentNNConfig.from_dict(gnn_transformer_config, suffix="_attacker")
+        gnn_transformer_agent_config_defender = AgentNNConfig.from_dict(gnn_transformer_config, suffix="_defender")
+        gnn_transformer_backbone_config_attacker = BackboneConfig.from_dict(gnn_transformer_config, suffix="_backbone_attacker")
+        gnn_transformer_backbone_config_defender = BackboneConfig.from_dict(gnn_transformer_config, suffix="_backbone_defender")
+        gnn_transformer_head_config_attacker = HeadConfig.from_dict(gnn_transformer_config, suffix="_head_attacker")
+        gnn_transformer_head_config_defender = HeadConfig.from_dict(gnn_transformer_config, suffix="_head_defender")
+
+    gnn_transformer_defender_extractor = CombinedExtractor(player_type=0, env=env, actions_map=gnn_transformer_backbone_config_defender.extractors)
     gnn_transformer_defender_agent = TrainableNNAgentPolicy(
         player_type=0,
         max_sequence_size=env_config.num_steps + 1,
@@ -238,9 +283,9 @@ if __name__ == "__main__":
         device=device,
         loss_config=gnn_transformer_loss_config_defender,
         training_config=gnn_transformer_training_config_defender,
-        agent_config=gnn_transformer_agent_config,
-        backbone_config=gnn_transformer_backbone_config,
-        head_config=gnn_transformer_head_config,
+        agent_config=gnn_transformer_agent_config_defender,
+        backbone_config=gnn_transformer_backbone_config_defender,
+        head_config=gnn_transformer_head_config_defender,
         run_name="test",
         add_logs=False,  # No logs during testing
         num_attackers=env.num_attackers,
@@ -249,13 +294,13 @@ if __name__ == "__main__":
     gnn_transformer_defender_agent.eval()
     gnn_transformer_defender_agent.load(os.path.join(gnn_transformer_model_path, "defender", "agent_0.pth"))
 
-    gnn_transformer_attacker_extractor = CombinedExtractor(player_type=1, env=env, actions_map=gnn_transformer_backbone_config.extractors)
+    gnn_transformer_attacker_extractor = CombinedExtractor(player_type=1, env=env, actions_map=gnn_transformer_backbone_config_attacker.extractors)
     gnn_transformer_attacker_agent = MultiAgentPolicy(
         action_size=env.action_size,
         player_type=1,
         device=device,
         run_name="test",
-        embedding_size=gnn_transformer_agent_config.embedding_size,
+        embedding_size=gnn_transformer_agent_config_attacker.embedding_size,
         policy_generator=AgentGenerator(
             TrainableNNAgentPolicy,
             {
@@ -269,9 +314,9 @@ if __name__ == "__main__":
                 "training_config": gnn_transformer_training_config_attacker,
                 "run_name": "test",
                 "add_logs": False,  # No logs during testing
-                "agent_config": gnn_transformer_agent_config,
-                "backbone_config": gnn_transformer_backbone_config,
-                "head_config": gnn_transformer_head_config,
+                "agent_config": gnn_transformer_agent_config_attacker,
+                "backbone_config": gnn_transformer_backbone_config_attacker,
+                "head_config": gnn_transformer_head_config_attacker,
                 "num_attackers": env.num_attackers,
                 "num_defenders": env.num_defenders,
             }
@@ -313,7 +358,7 @@ if __name__ == "__main__":
 
     random_attacker_agent = RandomAgent(
         action_size=env.action_size,
-        embedding_size=nn_agent_config.embedding_size,
+        embedding_size=nn_agent_config_attacker.embedding_size,
         player_type=1,
         device="cpu",
         run_name="test",
@@ -322,7 +367,7 @@ if __name__ == "__main__":
     )
     greedy_oracle_attacker_agent = GreedyOracleAgent(
         action_size=env.action_size,
-        embedding_size=nn_agent_config.embedding_size,
+        embedding_size=nn_agent_config_attacker.embedding_size,
         total_steps=env.num_steps,
         player_type=1,
         device="cpu",
