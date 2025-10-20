@@ -305,8 +305,9 @@ class ActorHead(nn.Module):
                 nn.ReLU(),
                 nn.Linear(hidden_size, action_spec.high[0] + 1),
             )
+            self.actor_heads = nn.ModuleList([self.actor_head])
         else:
-            self.actor_head = nn.ModuleList([
+            self.actor_heads = nn.ModuleList([
                 nn.Sequential(
                     nn.Linear(embedding_size, hidden_size),
                     nn.ReLU(),
@@ -336,7 +337,7 @@ class ActorHead(nn.Module):
         is_grad = x.requires_grad
 
         outputs = []
-        for i, head in enumerate(self.actor_head if isinstance(self.actor_head, nn.ModuleList) else [self.actor_head]):
+        for i, head in enumerate(self.actor_heads):
             head_output = head(x.to(self.device))
             head_output[~actions_mask[..., self.player_start_id + i, :]] = -1e8  # Mask invalid actions
             if not is_grad:

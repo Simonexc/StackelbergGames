@@ -44,7 +44,7 @@ class BaseAgent(nn.Module, ABC):
         torch.save(self.state_dict(), save_path)
 
     def load(self, path: str) -> None:
-        self.load_state_dict(torch.load(path, map_location=self._device))
+        self.load_state_dict(torch.load(path, map_location=self._device), strict=False)
 
     @abstractmethod
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
