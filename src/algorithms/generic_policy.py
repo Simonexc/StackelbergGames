@@ -45,8 +45,6 @@ class RandomAgent(BaseAgent):
         super().__init__(player_type, device, run_name, num_defenders, num_attackers, agent_id)
         self.embedding_size = embedding_size
         self.action_size = action_size
-        assert self.player_type == 1, "RandomAgent is only implemented for attackers."
-        assert self.num_attackers == 1, "RandomAgent is only implemented for single attacker."
 
     def save(self) -> None:
         # RandomAgent does not save its state
@@ -57,10 +55,19 @@ class RandomAgent(BaseAgent):
         pass
 
     def forward(self, tensordict: TensorDictBase) -> TensorDictBase:
-        action_mask = tensordict["actions_mask"][..., self.num_defenders, :]
-        available_actions = action_mask.nonzero(as_tuple=False).squeeze(-1)
-        action = available_actions[torch.randint(0, len(available_actions), torch.Size((self.num_defenders if self.player_type == 0 else self.num_attackers,)), dtype=torch.int32).item()].unsqueeze(-1)
-        tensordict.update(_tensordict_update_from_action(action, self.embedding_size, self.action_size, self._device))
+        if self.player_type == 0:
+            action_mask = tensordict["actions_mask"][..., :self.num_defenders, :]
+        else:
+            action_mask = tensordict["actions_mask"][..., self.num_defenders:, :]
+
+        actions = []
+        for mask in action_mask:
+            available_actions = mask.nonzero(as_tuple=False).squeeze(-1)
+            actions.append(
+                available_actions[torch.randint(0, len(available_actions), torch.Size(()), dtype=torch.int32).item()].item()
+            )
+        actions = torch.tensor(actions)
+        tensordict.update(_tensordict_update_from_action(actions, self.embedding_size, self.action_size, self._device))
         return tensordict
 
 
