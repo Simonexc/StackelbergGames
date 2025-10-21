@@ -365,6 +365,16 @@ if __name__ == "__main__":
         num_attackers=env.num_attackers,
         num_defenders=env.num_defenders,
     )
+    random_defender_agent = RandomAgent(
+        action_size=env.action_size,
+        embedding_size=nn_agent_config_attacker.embedding_size,
+        player_type=0,
+        device="cpu",
+        run_name="test",
+        num_attackers=env.num_attackers,
+        num_defenders=env.num_defenders,
+    )
+
     greedy_oracle_attacker_agent = GreedyOracleAgent(
         action_size=env.action_size,
         embedding_size=nn_agent_config_attacker.embedding_size,
@@ -383,9 +393,9 @@ if __name__ == "__main__":
             (gnn_defender_agent, gnn_attacker_agent, "gnn"),
             (gnn_transformer_defender_agent, gnn_transformer_attacker_agent, "gnn_transformer"),
             (coevosg_defender_agent, coevosg_attacker_agent, "coevosg"),
+            (random_defender_agent, random_attacker_agent, "random"),
         ],
         [
-            (random_attacker_agent, "random"),
             (greedy_oracle_attacker_agent, "greedy"),
         ],
         env,
